@@ -1,8 +1,8 @@
 # Claude Code Dashboard
 
-Lokale web-app om Claude Code sessies te browsen vanuit `~/.claude/`. Gebouwd met Next.js 16, React 19 en Tailwind 4.
+A local web app for browsing Claude Code sessions from `~/.claude/`. Built with Next.js 16, React 19, and Tailwind 4.
 
-## Starten
+## Getting Started
 
 ```bash
 npm run dev   # http://localhost:3000
@@ -10,48 +10,48 @@ npm run dev   # http://localhost:3000
 
 ## Features
 
-- **Projectenoverzicht** — alle projecten met unread-markers en last-activity
-- **Sessiesbrowser** — sessies over alle projecten, gegroepeerd op tijdperiode (Today, Yesterday, This week, …), collapsible groepen
-- **Transcriptviewer** — volledig transcript met Markdown-rendering (tabellen, code blocks, GFM)
-- **Inline tail preview** — klap de laatste N berichten uit zonder de transcriptpagina te openen; "Load more" laadt telkens 10 berichten bij
-- **Unread tracking** — blauw bolletje per sessie; bulk mark read/unread per groep; optioneel auto-mark bij openen (instelbaar)
-- **Realtime updates** — SSE-verbinding detecteert wijzigingen in `~/.claude/projects/` en ververst de pagina automatisch
-- **Project-filter pills** — filter op het eerste padsegment van het projectpad
-- **Sort toggle** — nieuwste of oudste eerst, persistent via `localStorage`
-- **Actieve sessies** — leest `~/.claude/sessions/*.json` voor lopende Claude-processen
-- **IDE-vensterdetectie** — leest `~/.claude/ide/*.lock` om open IDE-vensters te tonen; kan een bestand openen in de juiste IDE
-- **Hook-ontvanger** — POST `/api/hooks` vanuit Claude Code hooks (stop, notification) triggert realtime meldingen in de dashboard
+- **Projects overview** — all projects with unread markers and last-activity timestamps
+- **Sessions browser** — sessions across all projects, grouped by time period (Today, Yesterday, This week, …), with collapsible groups
+- **Transcript viewer** — full transcript with Markdown rendering (tables, code blocks, GFM)
+- **Inline tail preview** — expand the last N messages without leaving the sessions list; "Load more" adds 10 messages at a time
+- **Unread tracking** — blue dot per session; bulk mark read/unread per group; optional auto-mark on open (configurable)
+- **Real-time updates** — SSE connection detects changes in `~/.claude/projects/` and refreshes automatically
+- **Project filter pills** — filter by the first path segment of the project path
+- **Sort toggle** — newest or oldest first, persisted via `localStorage`
+- **Active sessions** — reads `~/.claude/sessions/*.json` for running Claude processes
+- **IDE window detection** — reads `~/.claude/ide/*.lock` to show open IDE windows; can open a file directly in the right IDE
+- **Hook receiver** — POST `/api/hooks` from Claude Code hooks (stop, notification) triggers real-time notifications in the dashboard
 
-## Pagina's
+## Pages
 
-| URL | Inhoud |
+| URL | Content |
 |---|---|
-| `/` | Projectenlijst met unread-count en last-activity |
-| `/sessions` | Alle sessies gegroepeerd op tijdperiode, All/Unread toggle, inline tail expand |
-| `/projects/[slug]` | Sessies van één project met mark read/unread per sessie |
-| `/projects/[slug]/sessions/[id]` | Volledig transcript |
-| `/settings` | App-instellingen (o.a. auto-mark-as-read) |
+| `/` | Projects list with unread count and last activity |
+| `/sessions` | All sessions grouped by time period, All/Unread toggle, inline tail expand |
+| `/projects/[slug]` | Sessions for one project with per-session mark read/unread |
+| `/projects/[slug]/sessions/[id]` | Full transcript |
+| `/settings` | App settings (e.g. auto-mark-as-read) |
 
 ## Data
 
-De app leest uitsluitend lokale bestanden — er is geen authenticatie en geen externe server.
+The app reads local files only — no authentication, no external server.
 
-| Bestand | Gebruik |
+| File | Purpose |
 |---|---|
-| `~/.claude/projects/<slug>/*.jsonl` | Sessie-transcripten |
-| `~/.claude/sessions/*.json` | Actieve Claude-processen |
-| `~/.claude/ide/*.lock` | Open IDE-vensters |
-| `~/.claude/dashboard-read.json` | Read-state (wordt bijgehouden door de app) |
-| `~/.claude/dashboard-settings.json` | App-instellingen |
+| `~/.claude/projects/<slug>/*.jsonl` | Session transcripts |
+| `~/.claude/sessions/*.json` | Active Claude processes |
+| `~/.claude/ide/*.lock` | Open IDE windows |
+| `~/.claude/dashboard-read.json` | Read state (managed by the app) |
+| `~/.claude/dashboard-settings.json` | App settings |
 
-### Slug-formaat
+### Slug format
 
-Claude encodeert paden als slug: `:` → `-`, path-separators → `-`.  
+Claude encodes paths as slugs: `:` → `-`, path separators → `-`.  
 `c:\work\git\foo` → `c--work-git-foo`
 
-## Claude Code hooks instellen
+## Setting up Claude Code hooks
 
-Voeg onderstaande toe aan je `~/.claude/settings.json` om stop- en notificatie-events door te sturen naar het dashboard:
+Add the following to `~/.claude/settings.json` to forward stop and notification events to the dashboard:
 
 ```json
 {
