@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: #09090b !important;
+  color: #fafafa;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes session-updated {
+  0%   { box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.8), 0 0 16px rgba(96, 165, 250, 0.12); }
+  50%  { box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35), 0 0 8px rgba(96, 165, 250, 0.06); }
+  100% { box-shadow: none; }
+}
