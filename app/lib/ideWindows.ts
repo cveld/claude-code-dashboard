@@ -2,6 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+function isAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
 export interface IdeWindowLock {
   port: number;
   workspaceFolders: string[];
@@ -36,10 +40,12 @@ export function readIdeWindowLocks(): IdeWindowLock[] {
       const content = JSON.parse(
         fs.readFileSync(path.join(ideDir, file), "utf-8")
       );
+      const pid: number = content.pid;
+      if (!isAlive(pid)) continue;
       windows.push({
         port,
         workspaceFolders: content.workspaceFolders ?? [],
-        pid: content.pid,
+        pid,
         ideName: content.ideName ?? "VS Code",
         authToken: content.authToken ?? "",
       });

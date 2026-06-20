@@ -5,6 +5,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useDataRefresh } from "@/app/lib/useDataRefresh";
+import { IdeWindow, findIdeWindowForSlug } from "@/app/lib/dashboard";
 
 interface TranscriptMessage {
   type: "user" | "assistant" | "system" | "other";
@@ -82,9 +83,11 @@ export function TranscriptPanel({
   const [loading, setLoading] = useState(true);
   const [isRead, setIsRead] = useState(false);
   const [stats, setStats] = useState<SessionStats | null>(null);
+  const [ideWindow, setIdeWindow] = useState<IdeWindow | null>(null);
   const [toast, setToast] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const pendingScrollRef = useRef(false);
 
   const readStateKey = `${decodeURIComponent(slug)}/${id}`;
 
@@ -92,6 +95,15 @@ export function TranscriptPanel({
     navigator.clipboard.writeText(id);
     setToast(true);
     setTimeout(() => setToast(false), 2000);
+  }
+
+  function focusIde() {
+    if (!ideWindow) return;
+    fetch("/api/ide-windows/open-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ port: ideWindow.port, filePath: ideWindow.workspaceFolders[0] }),
+    });
   }
 
   function isNearBottom() {
@@ -131,10 +143,13 @@ export function TranscriptPanel({
     setTitle(null);
     setDisplayPath(null);
     setStats(null);
+    pendingScrollRef.current = true;
 
     fetch(`/api/projects/${slug}/sessions/${id}/stats`)
       .then((r) => r.json())
       .then((s) => { if (!s.error) setStats(s); });
+
+    setIdeWindow(null);
 
     Promise.all([
       fetch(`/api/projects/${slug}/sessions/${id}`).then((r) => r.json()),
@@ -142,7 +157,13 @@ export function TranscriptPanel({
       fetch("/api/read-state").then((r) => r.json()),
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/projects").then((r) => r.json()),
-    ]).then(([transcript, sessions, readState, settings, projects]) => {
+      fetch("/api/ide-windows").then((r) => r.json()),
+    ]).then(([transcript, sessions, readState, settings, projects, ideWindows]) => {
+      setIdeWindow(
+        Array.isArray(ideWindows)
+          ? findIdeWindowForSlug(decodeURIComponent(slug), ideWindows) ?? null
+          : null
+      );
       setMessages(transcript.messages ?? []);
       const session = Array.isArray(sessions)
         ? sessions.find((s: { id: string }) => s.id === id)
@@ -169,9 +190,20 @@ export function TranscriptPanel({
       }
 
       setLoading(false);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" }), 0);
     });
   }, [slug, id, readStateKey]);
+
+  // Scroll to bottom once the freshly opened transcript is actually in the DOM.
+  useEffect(() => {
+    if (!pendingScrollRef.current || messages.length === 0) return;
+    pendingScrollRef.current = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    });
+  }, [messages]);
 
   useDataRefresh(loadTranscript);
 
@@ -208,18 +240,29 @@ export function TranscriptPanel({
               </button>
             </div>
           </div>
-          {!loading && (
-            <button
-              onClick={toggleRead}
-              className={`shrink-0 text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                isRead
-                  ? "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-                  : "border-blue-700 text-blue-400 hover:border-blue-500 hover:text-blue-200"
-              }`}
-            >
-              {isRead ? "Mark as unread" : "Mark as read"}
-            </button>
-          )}
+          <div className="shrink-0 flex items-center gap-2">
+            {ideWindow && (
+              <button
+                onClick={focusIde}
+                title={`Open in ${ideWindow.ideName}`}
+                className="text-xs font-mono px-2 py-1.5 rounded-md bg-blue-950 text-blue-400 hover:bg-blue-900 hover:text-blue-300 transition-colors"
+              >
+                VS
+              </button>
+            )}
+            {!loading && (
+              <button
+                onClick={toggleRead}
+                className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                  isRead
+                    ? "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                    : "border-blue-700 text-blue-400 hover:border-blue-500 hover:text-blue-200"
+                }`}
+              >
+                {isRead ? "Mark as unread" : "Mark as read"}
+              </button>
+            )}
+          </div>
         </div>
         {stats && <StatsBar stats={stats} />}
       </div>

@@ -4,10 +4,13 @@
 
 | Route | Bestand | Inhoud |
 |---|---|---|
-| `/` | `app/page.tsx` | Projectenlijst met unread markers |
-| `/sessions` | `app/sessions/page.tsx` | Sessies gegroepeerd op tijdperiode, collapsible, met All/Unread toggle en Mark read/unread per groep |
+| `/` | `app/page.tsx` | Projectenlijst met unread markers + IDE-window badge |
+| `/sessions` | `app/sessions/page.tsx` | Sessies gegroepeerd op tijdperiode, collapsible, met All/Unread toggle, List/Split layout en Mark read/unread per groep |
+| `/settings` | `app/settings/page.tsx` | Toggle-instellingen (`autoMarkAsRead`) |
 | `/projects/[slug]` | `app/projects/[slug]/page.tsx` | Sessies van één project, met per-sessie Mark read/unread knop |
-| `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript |
+| `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript (rendert `TranscriptPanel`) |
+
+Schermen + opties per route staan in `screens.md`.
 
 Navigatie via `DashboardNav` met `Link` + `usePathname` — geen `viewMode` state, de URL is de bron van waarheid.
 
@@ -29,8 +32,14 @@ Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 | `/api/sessions` | GET | Alle sessies over alle projecten, gesorteerd op mtime. `?limit=N` (max 500, default 100), `?project=slug` voor filter. |
 | `/api/projects/[slug]/sessions` | GET | Sessies van één project |
 | `/api/projects/[slug]/sessions/[id]` | GET | Volledig transcript als `{ messages: TranscriptMessage[] }` |
+| `/api/projects/[slug]/sessions/[id]/stats` | GET | Token/context-stats voor `StatsBar` (`currentContext`, `totalOutputTokens`, cache, `assistantTurns`, `contextWindowSize`) |
 | `/api/read-state` | GET/POST | Leest/schrijft `.claude/dashboard-read.json`. POST: `{ slug }` of `{ slugs: string[], unread?: boolean }` voor bulk. `unread: true` verwijdert de key. |
-| `/api/events` | GET (SSE) | Stuurt `change` event bij `.jsonl`-wijziging in `~/.claude/projects/`. Heartbeat comment elke 30s. |
+| `/api/settings` | GET/POST | Leest/schrijft `~/.claude/dashboard-settings.json`. Bevat `autoMarkAsRead`. |
+| `/api/active-sessions` | GET | Live sessies uit `~/.claude/sessions/*.json` (pid, sessionId, cwd, startedAt, …) |
+| `/api/ide-windows` | GET | Draaiende IDE-vensters uit `~/.claude/ide/*.lock` (alleen levend PID). authToken weggelaten. |
+| `/api/ide-windows/open-file` | POST | `{ port, filePath }` → opent file via MCP-`openFile` over WS + brengt venster naar voorgrond (Windows). |
+| `/api/hooks` | POST | Ontvangt Claude-Code hook (`stop`/`notification`), emit op in-memory `hookEmitter`. |
+| `/api/events` | GET (SSE) | Stuurt `change` event bij `.jsonl`-wijziging in `~/.claude/projects/`, én `hook` events uit `hookEmitter`. Heartbeat comment elke 30s. |
 
 ## Data types
 
@@ -136,8 +145,16 @@ Tabellen in het volledige transcript krijgen custom `components` (scrollable wra
 
 ## Real-time updates (SSE)
 
-`useDataRefresh(onRefresh)` opent een `EventSource` op `/api/events`. Bij elk `change` event wordt `onRefresh` aangeroepen na 1 seconde debounce (voorkomt storm bij snelle writes).
+`useDataRefresh(onRefresh, onHookEvent?)` opent een `EventSource` op `/api/events`. Bij elk `change` event wordt `onRefresh` aangeroepen na 1 seconde debounce (voorkomt storm bij snelle writes). Bij een `hook` event wordt `onHookEvent` aangeroepen met de geparste `HookEvent`.
 
-De SSE route opent `fs.watch` op `~/.claude/projects/` met `{ recursive: true }`. Cleanup via `req.signal` `abort` event.
+De SSE route opent `fs.watch` op `~/.claude/projects/` met `{ recursive: true }` én luistert op `hookEmitter` voor hook-events. Cleanup via `req.signal` `abort` event.
 
-Pages die dit gebruiken: `app/page.tsx`, `app/sessions/page.tsx`.
+Pages die dit gebruiken: `app/page.tsx`, `app/sessions/page.tsx` (laatste ook met `onHookEvent`).
+
+## Hook-events
+
+Claude-Code hooks POSTen naar `/api/hooks`. De route bouwt een `HookEvent` (`type`, `sessionId`, `projectSlug`, `message?`, `title?`, `timestamp`) en doet `hookEmitter.emit("hook", event)`. De emitter is een globalThis-singleton (`app/lib/hookEvents.ts`) zodat hij hot-reload en route-isolatie overleeft. `/api/events` relayed het naar de browser; `/sessions` toont een dot (groen=stop, amber=notification) + browser-`Notification`. Zie `screens.md`.
+
+## IDE-windows
+
+`app/lib/ideWindows.ts` leest `~/.claude/ide/*.lock` en filtert op levend PID (`process.kill(pid,0)`). `findIdeWindowForSlug` (in `dashboard.ts`) matcht een venster op project-slug via `pathToSlug(workspaceFolder)`. Open-file gaat via MCP `openFile` over WebSocket met auth-token uit de lock; op Windows wordt het venster ook naar voren gehaald via PowerShell `SetForegroundWindow`.

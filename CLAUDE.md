@@ -1,5 +1,6 @@
 @AGENTS.md
 @docs/architecture.md
+@docs/screens.md
 @docs/gotchas.md
 
 # Workspace Dashboard App

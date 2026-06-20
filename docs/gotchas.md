@@ -22,3 +22,9 @@
 ```
 
 Dit bypass Tailwind class-generatie volledig en werkt gegarandeerd.
+
+## Interne scrollbars vereisen een bounded hoogte — niet `flex-1`
+
+De body is `min-h-full flex flex-col` (`app/layout.tsx`). `min-height` geeft géén *definite* hoogte, dus een child met `flex-1 overflow-hidden` krijgt geen bounded hoogte: de pagina groeit en scrollt als geheel i.p.v. dat interne panelen hun eigen scrollbar krijgen.
+
+Dit brak de split-view in `/sessions`: sticky header + onafhankelijk scrollende kolommen werkten niet. **Fix:** geef de split-root een vaste viewporthoogte (`h-screen` i.p.v. `flex-1`); dan werken de geneste `overflow-y-auto`-containers wél. Zie `screens.md` → Split-modus.
