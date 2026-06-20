@@ -2,11 +2,37 @@
 
 A local web app for browsing Claude Code sessions from `~/.claude/`. Built with Next.js 16, React 19, and Tailwind 4.
 
-## Getting Started
+## Run it
+
+No clone, no install — just run it with `npx`:
 
 ```bash
+npx @cveld/claude-code-dashboard          # http://localhost:3000
+npx @cveld/claude-code-dashboard -p 4000  # custom port
+```
+
+It reads from your local `~/.claude/` directory. Open the printed URL in your browser.
+
+## Development
+
+```bash
+npm install
 npm run dev   # http://localhost:3000
 ```
+
+## Releasing
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please).
+Push [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, …) to
+`main`; release-please opens a release PR that bumps the version and updates `CHANGELOG.md`.
+Merging that PR tags a GitHub release and the workflow publishes the package to npm
+with [provenance](https://docs.npmjs.com/generating-provenance-statements).
+
+> Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+> (OIDC) — no `NPM_TOKEN` secret. Configure the trusted publisher once on npmjs.com for
+> `@cveld/claude-code-dashboard`: GitHub repo `cveld/claude-code-dashboard`, workflow
+> `release-please.yml`. The package must already exist, so the very first version is
+> published manually (`npm publish --access public`).
 
 ## Features
 

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
+export const dynamic = "force-dynamic";
+
+import { useEffect, useState, useCallback, useRef, useLayoutEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -125,7 +127,7 @@ function IconSplit() {
   );
 }
 
-export default function SessionsPage() {
+function SessionsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedSlug = searchParams.get("slug");
@@ -142,16 +144,13 @@ export default function SessionsPage() {
     }
     return false;
   });
-  const [sortAsc, setSortAsc] = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem("sort-asc") === "true"
-  );
-  const [layoutMode, setLayoutMode] = useState<"list" | "split">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("sessions-layout") as "list" | "split") ?? "list";
-    }
-    return "list";
-  });
+  const [sortAsc, setSortAsc] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"list" | "split">("list");
 
+  useEffect(() => {
+    setSortAsc(localStorage.getItem("sort-asc") === "true");
+    setLayoutMode((localStorage.getItem("sessions-layout") as "list" | "split") ?? "list");
+  }, []);
   useEffect(() => { localStorage.setItem("sort-asc", String(sortAsc)); }, [sortAsc]);
   useEffect(() => { localStorage.setItem("sessions-layout", layoutMode); }, [layoutMode]);
 
@@ -485,14 +484,20 @@ export default function SessionsPage() {
                             <span className="w-1.5 h-1.5 shrink-0" />
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className={`text-xs truncate ${isSelected ? "text-white" : "text-zinc-300 group-hover:text-white"}`}>
+                            <div
+                              className={`text-xs truncate ${isSelected ? "text-white" : "text-zinc-300 group-hover:text-white"}`}
+                              title={s.title ?? s.firstUserMessage ?? undefined}
+                            >
                               {s.title ?? s.firstUserMessage ?? (
                                 <span className="italic text-zinc-500">Untitled</span>
                               )}
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-xs text-zinc-600 truncate font-mono text-[10px]">
-                                {topSegment(s.projectDisplayPath)}
+                              <span
+                                className="text-xs text-zinc-600 truncate font-mono text-[10px]"
+                                title={s.projectDisplayPath}
+                              >
+                                {s.projectDisplayPath}
                               </span>
                             </div>
                           </div>
@@ -515,8 +520,8 @@ export default function SessionsPage() {
 
   if (layoutMode === "split") {
     return (
-      <div className="flex flex-col flex-1 overflow-hidden w-full">
-        {/* Top bar */}
+      <div className="flex flex-col h-screen overflow-hidden w-full">
+        {/* Top bar — sticky */}
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800 space-y-3">
           <DashboardNav
             projects={projects}
@@ -775,5 +780,13 @@ export default function SessionsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SessionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SessionsPageInner />
+    </Suspense>
   );
 }

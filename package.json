@@ -1,11 +1,42 @@
 {
-  "name": "workspace-dashboard",
+  "name": "@cveld/claude-code-dashboard",
   "version": "0.1.0",
-  "private": true,
+  "description": "A local web dashboard for browsing Claude Code sessions, projects, and transcripts from ~/.claude/.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "dashboard",
+    "anthropic",
+    "nextjs"
+  ],
+  "license": "MIT",
+  "author": "Carl in 't Veld",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cveld/claude-code-dashboard.git"
+  },
+  "homepage": "https://github.com/cveld/claude-code-dashboard#readme",
+  "bugs": {
+    "url": "https://github.com/cveld/claude-code-dashboard/issues"
+  },
+  "bin": {
+    "claude-code-dashboard": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    ".next",
+    "public",
+    "next.config.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prepack": "node scripts/clean-package.mjs",
     "lint": "eslint",
     "test": "vitest run"
   },
