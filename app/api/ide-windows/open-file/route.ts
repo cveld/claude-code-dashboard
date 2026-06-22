@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
   // On Windows, use SetForegroundWindow via PowerShell — fire and forget
   if (process.platform === "win32" && pid) {
     console.log(`[open-file] focusing pid=${pid} via PowerShell`);
+    // SetForegroundWindow is blocked for background processes; the keybd_event ALT trick
+    // temporarily grants foreground permission by simulating keyboard input.
     const ps = `
 $p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue
 if ($p -and $p.MainWindowHandle -ne 0) {
@@ -38,8 +40,11 @@ using System.Runtime.InteropServices;
 public class WinFocus {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
 }
 "@
+  [WinFocus]::keybd_event(0x12, 0, 0, 0)
+  [WinFocus]::keybd_event(0x12, 0, 2, 0)
   [WinFocus]::ShowWindow($p.MainWindowHandle, 9)
   [WinFocus]::SetForegroundWindow($p.MainWindowHandle)
   Write-Host "focused"
