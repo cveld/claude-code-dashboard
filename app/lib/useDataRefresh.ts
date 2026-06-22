@@ -3,8 +3,13 @@
 import { useEffect, useRef } from "react";
 import type { HookEvent } from "./dashboard";
 
+export interface ChangeEvent {
+  slug: string | null;
+  sessionId: string | null;
+}
+
 export function useDataRefresh(
-  onRefresh: () => void,
+  onRefresh: (change?: ChangeEvent) => void,
   onHookEvent?: (event: HookEvent) => void
 ) {
   const refreshRef = useRef(onRefresh);
@@ -14,11 +19,20 @@ export function useDataRefresh(
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let pendingChange: ChangeEvent | undefined;
     const es = new EventSource("/api/events");
 
-    es.addEventListener("change", () => {
+    es.addEventListener("change", (e) => {
+      try {
+        pendingChange = JSON.parse((e as MessageEvent).data) as ChangeEvent;
+      } catch {
+        pendingChange = { slug: null, sessionId: null };
+      }
       clearTimeout(timer);
-      timer = setTimeout(() => refreshRef.current(), 1_000);
+      timer = setTimeout(() => {
+        refreshRef.current(pendingChange);
+        pendingChange = undefined;
+      }, 2_000);
     });
 
     es.addEventListener("hook", (e) => {

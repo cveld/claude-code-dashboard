@@ -11,9 +11,10 @@ interface Props {
   unreadCounts?: Record<string, number>;
   selectedSlugs: string[];
   onSelectedChange: (slugs: string[]) => void;
+  refreshCount?: number;
 }
 
-export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlugs, onSelectedChange }: Props) {
+export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlugs, onSelectedChange, refreshCount }: Props) {
   const pathname = usePathname();
 
   return (
@@ -46,6 +47,14 @@ export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlug
         >
           Settings
         </Link>
+        {refreshCount !== undefined && refreshCount > 0 && (
+          <span
+            className="px-2 py-1 text-xs text-zinc-600 tabular-nums"
+            title={`${refreshCount} data refresh${refreshCount === 1 ? "" : "es"} since page load`}
+          >
+            ↺ {refreshCount}
+          </span>
+        )}
       </div>
 
       {projects.length > 1 && (

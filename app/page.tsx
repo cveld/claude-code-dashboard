@@ -11,7 +11,7 @@ import {
   isUnread,
   findIdeWindowForSlug,
 } from "./lib/dashboard";
-import { useDataRefresh } from "./lib/useDataRefresh";
+import { useDataRefresh, type ChangeEvent } from "./lib/useDataRefresh";
 
 export default function Home() {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
@@ -21,23 +21,58 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [sortAsc, setSortAsc] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => { setSortAsc(localStorage.getItem("sort-asc") === "true"); }, []);
   useEffect(() => { localStorage.setItem("sort-asc", String(sortAsc)); }, [sortAsc]);
 
-  const loadData = useCallback(() => {
-    Promise.all([
+  const loadData = useCallback((change?: ChangeEvent) => {
+    const isInitial = change === undefined;
+    if (!isInitial) setRefreshCount((c) => c + 1);
+
+    const sessionUrl = change?.slug
+      ? `/api/sessions?limit=500&project=${encodeURIComponent(change.slug)}`
+      : "/api/sessions?limit=500";
+
+    const promises: Promise<unknown>[] = [
       fetch("/api/projects").then((r) => r.json()),
-      fetch("/api/sessions?limit=500").then((r) => r.json()),
-      fetch("/api/read-state").then((r) => r.json()),
-      fetch("/api/ide-windows").then((r) => r.json()),
-    ]).then(([p, s, rs, ide]) => {
+      fetch(sessionUrl).then((r) => r.json()),
+    ];
+    if (isInitial) {
+      promises.push(fetch("/api/read-state").then((r) => r.json()));
+      promises.push(fetch("/api/ide-windows").then((r) => r.json()));
+    }
+
+    Promise.all(promises).then((results) => {
+      const [p, s] = results as [ProjectInfo[], SessionWithProject[]];
+      const rs = isInitial ? (results[2] as Record<string, string>) : undefined;
+      const ide = isInitial ? (results[3] as IdeWindow[]) : undefined;
+
       setProjects(p);
-      setSessions(s);
-      setReadState(rs);
-      setIdeWindows(ide);
+      if (change?.slug) {
+        setSessions((prev) => {
+          const others = prev.filter((sess) => sess.projectSlug !== change.slug);
+          return [...others, ...(Array.isArray(s) ? s : [])].sort(
+            (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+          );
+        });
+      } else {
+        setSessions(s);
+      }
+      if (rs !== undefined) setReadState(rs);
+      if (ide !== undefined) setIdeWindows(ide);
       setLoading(false);
     });
+  }, []);
+
+  // Poll ide-windows separately — they don't change due to session writes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/api/ide-windows")
+        .then((r) => r.json())
+        .then((ide) => setIdeWindows(ide));
+    }, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -87,6 +122,7 @@ export default function Home() {
         unreadCounts={unreadCountsPerProject}
         selectedSlugs={selectedSlugs}
         onSelectedChange={setSelectedSlugs}
+        refreshCount={refreshCount}
       />
 
       <section>

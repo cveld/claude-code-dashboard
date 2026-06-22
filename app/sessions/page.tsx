@@ -16,7 +16,7 @@ import {
   isUnread,
   timeAgo,
 } from "../lib/dashboard";
-import { useDataRefresh } from "../lib/useDataRefresh";
+import { useDataRefresh, type ChangeEvent } from "../lib/useDataRefresh";
 
 const CONTEXT_WINDOW = 200000;
 
@@ -160,6 +160,7 @@ function SessionsPageInner() {
   const [tailSize, setTailSize] = useState<Record<string, number>>({});
   const [changedSessions, setChangedSessions] = useState<Set<string>>(new Set());
   const [hookNotifs, setHookNotifs] = useState<Record<string, HookEvent>>({});
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     sessionStorage.setItem("sessions-unread-only", String(showUnreadOnly));
@@ -220,18 +221,40 @@ function SessionsPageInner() {
     setTimeout(() => setToast(false), 2000);
   }
 
-  const loadData = useCallback(() => {
-    Promise.all([
-      fetch("/api/projects").then((r) => r.json()),
-      fetch("/api/sessions").then((r) => r.json()),
-      fetch("/api/read-state").then((r) => r.json()),
-    ]).then(([p, s, rs]) => {
-      const oldSessions = sessionsRef.current;
+  const loadData = useCallback((change?: ChangeEvent) => {
+    const isInitial = change === undefined;
+    if (!isInitial) setRefreshCount((c) => c + 1);
 
+    const sessionUrl = change?.slug
+      ? `/api/sessions?project=${encodeURIComponent(change.slug)}`
+      : "/api/sessions";
+
+    const promises: Promise<unknown>[] = [
+      fetch("/api/projects").then((r) => r.json()),
+      fetch(sessionUrl).then((r) => r.json()),
+    ];
+    if (isInitial) {
+      promises.push(fetch("/api/read-state").then((r) => r.json()));
+    }
+
+    Promise.all(promises).then((results) => {
+      const [p, newSessions] = results as [ProjectInfo[], SessionWithProject[]];
+      const rs = isInitial ? (results[2] as Record<string, string>) : undefined;
+
+      const allSessions: SessionWithProject[] = change?.slug
+        ? (() => {
+            const others = sessionsRef.current.filter((s) => s.projectSlug !== change.slug);
+            return [...others, ...(Array.isArray(newSessions) ? newSessions : [])].sort(
+              (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+            );
+          })()
+        : (newSessions as SessionWithProject[]);
+
+      const oldSessions = sessionsRef.current;
       if (oldSessions.length > 0) {
         const oldMap = new Map(oldSessions.map((o) => [`${o.projectSlug}/${o.id}`, o]));
         const changed = new Set<string>();
-        for (const newS of s as SessionWithProject[]) {
+        for (const newS of allSessions) {
           const key = `${newS.projectSlug}/${newS.id}`;
           const old = oldMap.get(key);
           if (old && (old.lastActivity !== newS.lastActivity || old.messageCount !== newS.messageCount)) {
@@ -247,10 +270,10 @@ function SessionsPageInner() {
       });
       flipSnapshot.current = snap;
 
-      sessionsRef.current = s;
+      sessionsRef.current = allSessions;
       setProjects(p);
-      setSessions(s);
-      setReadState(rs);
+      setSessions(allSessions);
+      if (rs !== undefined) setReadState(rs);
       setLoading(false);
     });
   }, []);
@@ -537,6 +560,7 @@ function SessionsPageInner() {
             unreadCounts={unreadCountsPerProject}
             selectedSlugs={selectedSlugs}
             onSelectedChange={setSelectedSlugs}
+            refreshCount={refreshCount}
           />
           {controlsBar}
         </div>
@@ -585,6 +609,7 @@ function SessionsPageInner() {
         unreadCounts={unreadCountsPerProject}
         selectedSlugs={selectedSlugs}
         onSelectedChange={setSelectedSlugs}
+        refreshCount={refreshCount}
       />
 
       <section>
@@ -699,7 +724,7 @@ function SessionsPageInner() {
                                 <button
                                   onClick={() => markSession(s, !unread)}
                                   title={unread ? "Mark read" : "Mark unread"}
-                                  className="text-xs text-zinc-600 hover:text-zinc-200 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5"
+                                  className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5"
                                 >
                                   {unread ? "Mark read" : "Mark unread"}
                                 </button>

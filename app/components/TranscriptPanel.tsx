@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useDataRefresh } from "@/app/lib/useDataRefresh";
+import { useDataRefresh, type ChangeEvent } from "@/app/lib/useDataRefresh";
 import { IdeWindow, findIdeWindowForSlug } from "@/app/lib/dashboard";
 
 // Shared so user- and assistant-messages render tables identically: each table
@@ -157,16 +157,19 @@ export function TranscriptPanel({
     onReadStateChange?.();
   }
 
-  const loadTranscript = useCallback(() => {
+  const loadTranscript = useCallback((change?: ChangeEvent) => {
+    if (change && change.sessionId !== id) return;
     const wasNearBottom = isNearBottom();
-    fetch(`/api/projects/${slug}/sessions/${id}`)
-      .then((r) => r.json())
-      .then((transcript) => {
-        setMessages(transcript.messages ?? []);
-        if (wasNearBottom) {
-          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-        }
-      });
+    Promise.all([
+      fetch(`/api/projects/${slug}/sessions/${id}`).then((r) => r.json()),
+      fetch(`/api/projects/${slug}/sessions/${id}/stats`).then((r) => r.json()),
+    ]).then(([transcript, freshStats]) => {
+      setMessages(transcript.messages ?? []);
+      if (!freshStats.error) setStats(freshStats);
+      if (wasNearBottom) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
+    });
   }, [slug, id]);
 
   useEffect(() => {

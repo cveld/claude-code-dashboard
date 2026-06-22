@@ -20,7 +20,11 @@ export async function GET(req: NextRequest) {
       try {
         watcher = fs.watch(PROJECTS_DIR, { recursive: true }, (_event, filename) => {
           if (filename?.endsWith(".jsonl")) {
-            controller.enqueue(encoder.encode("event: change\ndata: {}\n\n"));
+            const parts = filename.replace(/\\/g, "/").split("/");
+            const slug = parts.length >= 2 ? parts[0] : null;
+            const sessionId = parts.length >= 2 ? parts[parts.length - 1].replace(".jsonl", "") : null;
+            const payload = JSON.stringify({ slug, sessionId });
+            controller.enqueue(encoder.encode(`event: change\ndata: ${payload}\n\n`));
           }
         });
       } catch {

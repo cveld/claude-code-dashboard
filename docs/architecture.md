@@ -145,11 +145,50 @@ Tabellen in het volledige transcript krijgen custom `components` (scrollable wra
 
 ## Real-time updates (SSE)
 
-`useDataRefresh(onRefresh, onHookEvent?)` opent een `EventSource` op `/api/events`. Bij elk `change` event wordt `onRefresh` aangeroepen na 1 seconde debounce (voorkomt storm bij snelle writes). Bij een `hook` event wordt `onHookEvent` aangeroepen met de geparste `HookEvent`.
+`useDataRefresh(onRefresh, onHookEvent?)` opent een `EventSource` op `/api/events`. Bij elk `change` event wordt `onRefresh` aangeroepen na **2 seconden** debounce. Bij een `hook` event wordt `onHookEvent` aangeroepen met de geparste `HookEvent`.
 
 De SSE route opent `fs.watch` op `~/.claude/projects/` met `{ recursive: true }` én luistert op `hookEmitter` voor hook-events. Cleanup via `req.signal` `abort` event.
 
 Pages die dit gebruiken: `app/page.tsx`, `app/sessions/page.tsx` (laatste ook met `onHookEvent`).
+
+### ChangeEvent payload
+
+Het `change` event stuurt `{ slug, sessionId }` mee (beide `string | null`):
+
+```ts
+export interface ChangeEvent {
+  slug: string | null;       // eerste path-segment van de gewijzigde .jsonl
+  sessionId: string | null;  // bestandsnaam zonder .jsonl extensie
+}
+```
+
+`onRefresh` ontvangt dit als optionele parameter: `(change?: ChangeEvent) => void`. Bij initial load is `change` `undefined`.
+
+### Gerichte refresh-strategie
+
+Pages gebruiken `change` om onnodig werk te vermijden:
+
+| Data | Initial load | Bij change event |
+|---|---|---|
+| `/api/projects` | ✓ | ✓ altijd |
+| `/api/sessions?project=<slug>` | Alle sessies | Alleen gewijzigd project; client merget terug |
+| `/api/read-state` | ✓ | ✗ skip — wijzigt alleen via eigen POST |
+| `/api/ide-windows` | ✓ | ✗ skip — los `setInterval(30s)` in `app/page.tsx` |
+| Transcript + stats | ✓ | Alleen als `change.sessionId === id` |
+
+**Merge-patroon** (home + sessions page):
+```ts
+setSessions(prev => {
+  const others = prev.filter(s => s.projectSlug !== change.slug);
+  return [...others, ...newProjectSessions].sort(
+    (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+  );
+});
+```
+
+### Refresh counter
+
+`DashboardNav` accepteert een optionele `refreshCount?: number` prop. Pages tracken dit via `useState` en incrementeren bij elke live refresh (niet bij initial load). Getoond als `↺ N` in de tab-balk — zichtbaar wanneer `> 0`.
 
 ## Hook-events
 
