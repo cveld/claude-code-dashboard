@@ -2,21 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ProjectInfo, topSegment } from "@/app/lib/dashboard";
+import { ProjectInfo } from "@/app/lib/dashboard";
+import { ProjectFilter } from "./ProjectFilter";
 
 interface Props {
   projects: ProjectInfo[];
   unreadCount?: number;
-  projectFilter: string;
-  onFilterChange: (f: string) => void;
+  unreadCounts?: Record<string, number>;
+  selectedSlugs: string[];
+  onSelectedChange: (slugs: string[]) => void;
 }
 
-export function DashboardNav({ projects, unreadCount, projectFilter, onFilterChange }: Props) {
+export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlugs, onSelectedChange }: Props) {
   const pathname = usePathname();
-
-  const rootSegments = Array.from(
-    new Set(projects.map((p) => topSegment(p.displayPath)))
-  ).sort();
 
   return (
     <div className="flex flex-wrap items-center gap-4 mb-8">
@@ -50,28 +48,13 @@ export function DashboardNav({ projects, unreadCount, projectFilter, onFilterCha
         </Link>
       </div>
 
-      {rootSegments.length > 1 && (
-        <div className="flex items-center gap-1 bg-zinc-900 rounded-lg p-1 flex-wrap">
-          <button
-            onClick={() => onFilterChange("all")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              projectFilter === "all" ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            All
-          </button>
-          {rootSegments.map((seg) => (
-            <button
-              key={seg}
-              onClick={() => onFilterChange(seg === projectFilter ? "all" : seg)}
-              className={`px-3 py-1.5 rounded-md text-sm font-mono transition-colors ${
-                projectFilter === seg ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {seg}
-            </button>
-          ))}
-        </div>
+      {projects.length > 1 && (
+        <ProjectFilter
+          projects={projects}
+          selectedSlugs={selectedSlugs}
+          onSelectedChange={onSelectedChange}
+          unreadCounts={unreadCounts}
+        />
       )}
     </div>
   );

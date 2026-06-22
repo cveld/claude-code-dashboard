@@ -15,7 +15,6 @@ import {
   HookEvent,
   isUnread,
   timeAgo,
-  topSegment,
 } from "../lib/dashboard";
 import { useDataRefresh } from "../lib/useDataRefresh";
 
@@ -137,7 +136,7 @@ function SessionsPageInner() {
   const [sessions, setSessions] = useState<SessionWithProject[]>([]);
   const [readState, setReadState] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [projectFilter, setProjectFilter] = useState("all");
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [showUnreadOnly, setShowUnreadOnly] = useState(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem("sessions-unread-only") === "true";
@@ -292,9 +291,16 @@ function SessionsPageInner() {
 
   const unreadCount = sessions.filter((s) => isUnread(s, readState)).length;
 
+  const unreadCountsPerProject: Record<string, number> = {};
+  for (const s of sessions) {
+    if (isUnread(s, readState)) {
+      unreadCountsPerProject[s.projectSlug] = (unreadCountsPerProject[s.projectSlug] || 0) + 1;
+    }
+  }
+
   const visibleSessions = sessions.filter(
     (s) =>
-      (projectFilter === "all" || topSegment(s.projectDisplayPath) === projectFilter) &&
+      (selectedSlugs.length === 0 || selectedSlugs.includes(s.projectSlug)) &&
       (!showUnreadOnly || isUnread(s, readState))
   );
 
@@ -456,7 +462,9 @@ function SessionsPageInner() {
                     {group.sessions.length}
                   </span>
                   {groupUnreadCount > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                    <span className="font-normal text-blue-400 normal-case tracking-normal shrink-0">
+                      {groupUnreadCount}
+                    </span>
                   )}
                 </button>
                 {!isCollapsed && (
@@ -526,8 +534,9 @@ function SessionsPageInner() {
           <DashboardNav
             projects={projects}
             unreadCount={unreadCount}
-            projectFilter={projectFilter}
-            onFilterChange={setProjectFilter}
+            unreadCounts={unreadCountsPerProject}
+            selectedSlugs={selectedSlugs}
+            onSelectedChange={setSelectedSlugs}
           />
           {controlsBar}
         </div>
@@ -573,8 +582,9 @@ function SessionsPageInner() {
       <DashboardNav
         projects={projects}
         unreadCount={unreadCount}
-        projectFilter={projectFilter}
-        onFilterChange={setProjectFilter}
+        unreadCounts={unreadCountsPerProject}
+        selectedSlugs={selectedSlugs}
+        onSelectedChange={setSelectedSlugs}
       />
 
       <section>
@@ -613,7 +623,9 @@ function SessionsPageInner() {
                         {group.sessions.length}
                       </span>
                       {groupUnreadCount > 0 && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                        <span className="font-normal text-blue-400 normal-case tracking-normal">
+                          {groupUnreadCount} unread
+                        </span>
                       )}
                     </button>
                     <div className="h-px bg-zinc-800 w-full" />

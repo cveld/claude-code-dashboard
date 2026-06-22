@@ -5,19 +5,21 @@ import Link from "next/link";
 import { DashboardNav } from "./components/DashboardNav";
 import {
   ProjectInfo,
+  SessionWithProject,
   IdeWindow,
   timeAgo,
-  topSegment,
+  isUnread,
   findIdeWindowForSlug,
 } from "./lib/dashboard";
 import { useDataRefresh } from "./lib/useDataRefresh";
 
 export default function Home() {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [sessions, setSessions] = useState<SessionWithProject[]>([]);
   const [readState, setReadState] = useState<Record<string, string>>({});
   const [ideWindows, setIdeWindows] = useState<IdeWindow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [projectFilter, setProjectFilter] = useState("all");
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [sortAsc, setSortAsc] = useState(false);
 
   useEffect(() => { setSortAsc(localStorage.getItem("sort-asc") === "true"); }, []);
@@ -26,10 +28,12 @@ export default function Home() {
   const loadData = useCallback(() => {
     Promise.all([
       fetch("/api/projects").then((r) => r.json()),
+      fetch("/api/sessions?limit=500").then((r) => r.json()),
       fetch("/api/read-state").then((r) => r.json()),
       fetch("/api/ide-windows").then((r) => r.json()),
-    ]).then(([p, rs, ide]) => {
+    ]).then(([p, s, rs, ide]) => {
       setProjects(p);
+      setSessions(s);
       setReadState(rs);
       setIdeWindows(ide);
       setLoading(false);
@@ -61,8 +65,15 @@ export default function Home() {
     });
   }, []);
 
+  const unreadCountsPerProject: Record<string, number> = {};
+  for (const s of sessions) {
+    if (isUnread(s, readState)) {
+      unreadCountsPerProject[s.projectSlug] = (unreadCountsPerProject[s.projectSlug] || 0) + 1;
+    }
+  }
+
   const visibleProjects = projects.filter(
-    (p) => projectFilter === "all" || topSegment(p.displayPath) === projectFilter
+    (p) => selectedSlugs.length === 0 || selectedSlugs.includes(p.slug)
   );
   const displayedProjects = sortAsc ? [...visibleProjects].reverse() : visibleProjects;
 
@@ -73,8 +84,9 @@ export default function Home() {
 
       <DashboardNav
         projects={projects}
-        projectFilter={projectFilter}
-        onFilterChange={setProjectFilter}
+        unreadCounts={unreadCountsPerProject}
+        selectedSlugs={selectedSlugs}
+        onSelectedChange={setSelectedSlugs}
       />
 
       <section>
