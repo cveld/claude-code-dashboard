@@ -69,10 +69,8 @@ function StatsBar({ stats }: { stats: SessionStats }) {
   );
 }
 
-function isNearBottom(threshold = 120) {
-  const { scrollY, innerHeight } = window;
-  const { scrollHeight } = document.documentElement;
-  return scrollHeight - scrollY - innerHeight < threshold;
+function isNearBottom(el: HTMLElement, threshold = 120) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
 }
 
 export default function SessionPage() {
@@ -83,17 +81,25 @@ export default function SessionPage() {
   const [title, setTitle] = useState<string | null>(null);
   const [displayPath, setDisplayPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [isRead, setIsRead] = useState(false);
   const [stats, setStats] = useState<SessionStats | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const readStateKey = `${decodeURIComponent(slug)}/${id}`;
 
   function copyId() {
     navigator.clipboard.writeText(id);
-    setToast(true);
-    setTimeout(() => setToast(false), 2000);
+    setToast("Session ID copied");
+    setTimeout(() => setToast(null), 2000);
+  }
+
+  function copyPath() {
+    if (!displayPath) return;
+    navigator.clipboard.writeText(displayPath);
+    setToast("Path copied");
+    setTimeout(() => setToast(null), 2000);
   }
 
   async function toggleRead() {
@@ -111,13 +117,16 @@ export default function SessionPage() {
   }
 
   const loadTranscript = useCallback(() => {
-    const wasNearBottom = isNearBottom();
+    const wasNearBottom = scrollRef.current ? isNearBottom(scrollRef.current) : false;
     fetch(`/api/projects/${slug}/sessions/${id}`)
       .then((r) => r.json())
       .then((transcript) => {
         setMessages(transcript.messages ?? []);
         if (wasNearBottom) {
-          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          setTimeout(() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+          }, 50);
         }
       });
   }, [slug, id]);
@@ -164,25 +173,38 @@ export default function SessionPage() {
 
   useEffect(() => {
     if (!loading) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
     }
   }, [loading]);
 
   return (
-    <div className="relative">
-      <div className="sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800">
+    <div className="flex flex-col h-screen">
+      <div className="shrink-0 bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <Link href={backHref} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← Sessions</Link>
               {title && <h1 className="text-lg font-semibold text-white mt-1">{title}</h1>}
               {displayPath && (
-                <Link
-                  href={`/projects/${slug}?highlight=${id}`}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-0.5 truncate block"
-                >
-                  {displayPath}
-                </Link>
+                <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                  <Link
+                    href={`/projects/${slug}?highlight=${id}`}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors truncate"
+                  >
+                    {displayPath}
+                  </Link>
+                  <button
+                    onClick={copyPath}
+                    title="Copy path"
+                    className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
               )}
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs font-mono text-zinc-600 break-all">{id}</span>
@@ -215,6 +237,7 @@ export default function SessionPage() {
         </div>
       </div>
 
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="max-w-4xl w-full mx-auto px-4 py-8">
 
       {loading ? (
@@ -294,9 +317,10 @@ export default function SessionPage() {
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-100 text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
-          Session ID copied to clipboard
+          {toast}
         </div>
       )}
+      </div>
       </div>
     </div>
   );

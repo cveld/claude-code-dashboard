@@ -52,6 +52,7 @@ Layout: `h-screen` root, **sticky top-bar** (`shrink-0` met nav + controls), daa
 
 - Eigen sticky header (`shrink-0`): titel, project-link, session-id + copy-knop, **VS**-knop (als een IDE-window matcht, `findIdeWindowForSlug` → focus IDE), Mark as read/unread, `StatsBar`.
 - `StatsBar`: context-bar (kleur schaalt met %), output-tokens, cache-hit %, assistant-turns. Data uit `/api/projects/[slug]/sessions/[id]/stats`.
+- **Sticky gebruikersvraag:** direct onder de header zit een strip die de meest recente gebruikersbericht toont die boven het scherm is gescrolld. Zelfde opmaak als gewone user-ballonnen (blue-900, max-w-[85%], avatar rechts). Verdwijnt als de vraag weer zichtbaar is. Implementatie via scroll-event + `getBoundingClientRect` op user-message elementen (`userMsgRefs` map, geïndexeerd op berichtindex). Pulse-animatie (shadow) bij contextwissel.
 - Berichten scrollen in eigen `flex-1 overflow-y-auto`. Auto-scroll naar bodem bij open en bij nieuwe berichten als je near-bottom was.
 - Auto-mark-as-read bij open **alleen als** `settings.autoMarkAsRead` aan staat; anders handmatig via de knop.
 

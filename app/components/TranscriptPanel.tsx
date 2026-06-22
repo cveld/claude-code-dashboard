@@ -105,7 +105,7 @@ export function TranscriptPanel({
   const [isRead, setIsRead] = useState(false);
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [ideWindow, setIdeWindow] = useState<IdeWindow | null>(null);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
@@ -118,8 +118,15 @@ export function TranscriptPanel({
 
   function copyId() {
     navigator.clipboard.writeText(id);
-    setToast(true);
-    setTimeout(() => setToast(false), 2000);
+    setToast("Session ID copied");
+    setTimeout(() => setToast(null), 2000);
+  }
+
+  function copyPath() {
+    if (!displayPath) return;
+    navigator.clipboard.writeText(displayPath);
+    setToast("Path copied");
+    setTimeout(() => setToast(null), 2000);
   }
 
   function focusIde() {
@@ -275,12 +282,24 @@ export function TranscriptPanel({
               !loading && <h2 className="text-base font-semibold text-zinc-500 italic truncate">Untitled</h2>
             )}
             {displayPath && (
-              <Link
-                href={`/projects/${encodeURIComponent(slug)}?highlight=${id}`}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors block truncate mt-0.5"
-              >
-                {displayPath}
-              </Link>
+              <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                <Link
+                  href={`/projects/${encodeURIComponent(slug)}?highlight=${id}`}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors truncate"
+                >
+                  {displayPath}
+                </Link>
+                <button
+                  onClick={copyPath}
+                  title="Copy path"
+                  className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
             )}
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs font-mono text-zinc-600 truncate">{id}</span>
@@ -401,7 +420,7 @@ export function TranscriptPanel({
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-100 text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
-          Session ID copied to clipboard
+          {toast}
         </div>
       )}
     </div>

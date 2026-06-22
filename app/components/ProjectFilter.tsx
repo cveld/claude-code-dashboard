@@ -137,7 +137,7 @@ export function ProjectFilter({ projects, selectedSlugs, onSelectedChange, unrea
                     >
                       ✓
                     </span>
-                    <span className="flex-1 min-w-0 font-mono text-xs text-zinc-200 truncate">
+                    <span className="flex-1 min-w-0 font-mono text-xs text-zinc-200 truncate" title={p.displayPath}>
                       {p.displayPath}
                     </span>
                     {unreadCounts?.[p.slug] ? (
