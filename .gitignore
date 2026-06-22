@@ -42,3 +42,6 @@ next-env.d.ts
 
 # claude code local settings
 .claude/settings.local.json
+
+# Local screenshot output (scripts/screenshot.mjs)
+screenshots/

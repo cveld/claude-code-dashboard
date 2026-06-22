@@ -43,8 +43,8 @@ export default function SettingsPage() {
     <div className="max-w-5xl w-full mx-auto px-4 py-8">
       <DashboardNav
         projects={projects}
-        projectFilter="all"
-        onFilterChange={() => {}}
+        selectedSlugs={[]}
+        onSelectedChange={() => {}}
       />
       <h1 className="text-xl font-semibold text-white mb-6">Settings</h1>
 

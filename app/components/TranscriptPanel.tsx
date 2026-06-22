@@ -2,10 +2,31 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useDataRefresh } from "@/app/lib/useDataRefresh";
 import { IdeWindow, findIdeWindowForSlug } from "@/app/lib/dashboard";
+
+// Shared so user- and assistant-messages render tables identically: each table
+// gets its own overflow-x-auto wrapper so wide tables scroll within the bubble
+// instead of stretching the transcript column. Relies on the bubble having
+// `min-w-0` so the wrapper has a bounded width to scroll against.
+const markdownComponents: Components = {
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="text-xs border-collapse w-full">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-zinc-600 px-3 py-1.5 text-left font-semibold text-zinc-200 bg-zinc-700">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-zinc-600 px-3 py-1.5 text-zinc-300">{children}</td>
+  ),
+  tr: ({ children }) => (
+    <tr className="even:bg-zinc-750">{children}</tr>
+  ),
+};
 
 interface TranscriptMessage {
   type: "user" | "assistant" | "system" | "other";
@@ -285,7 +306,7 @@ export function TranscriptPanel({
                 }`}>
                   {msg.type === "user" ? "U" : "C"}
                 </div>
-                <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm break-words ${
+                <div className={`max-w-[85%] min-w-0 rounded-xl px-4 py-3 text-sm break-words ${
                   msg.type === "user" ? "bg-blue-900 text-zinc-100" : "bg-zinc-800 text-zinc-200"
                 }`}>
                   {msg.type === "user" ? (
@@ -293,7 +314,7 @@ export function TranscriptPanel({
                       prose-p:my-1 prose-code:bg-blue-950 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-zinc-200 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
                       prose-pre:bg-blue-950 prose-pre:border prose-pre:border-blue-900 prose-pre:rounded-lg prose-pre:p-3 prose-pre:overflow-x-auto
                       prose-headings:text-zinc-100 prose-strong:text-zinc-100">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.text}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="prose prose-sm prose-invert max-w-none
@@ -308,22 +329,7 @@ export function TranscriptPanel({
                       prose-hr:border-zinc-700">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
-                        components={{
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto my-2">
-                              <table className="text-xs border-collapse w-full">{children}</table>
-                            </div>
-                          ),
-                          th: ({ children }) => (
-                            <th className="border border-zinc-600 px-3 py-1.5 text-left font-semibold text-zinc-200 bg-zinc-700">{children}</th>
-                          ),
-                          td: ({ children }) => (
-                            <td className="border border-zinc-600 px-3 py-1.5 text-zinc-300">{children}</td>
-                          ),
-                          tr: ({ children }) => (
-                            <tr className="even:bg-zinc-750">{children}</tr>
-                          ),
-                        }}
+                        components={markdownComponents}
                       >
                         {msg.text}
                       </ReactMarkdown>
