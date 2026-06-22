@@ -109,6 +109,10 @@ export function TranscriptPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
+  const userMsgRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [stickyMsg, setStickyMsg] = useState<string | null>(null);
+  const [stickyPulse, setStickyPulse] = useState(false);
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const readStateKey = `${decodeURIComponent(slug)}/${id}`;
 
@@ -226,6 +230,37 @@ export function TranscriptPanel({
     });
   }, [messages]);
 
+  useEffect(() => {
+    userMsgRefs.current.clear();
+    setStickyMsg(null);
+  }, [messages]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const scrollRect = el.getBoundingClientRect();
+      let candidate: string | null = null;
+      const entries = Array.from(userMsgRefs.current.entries()).sort(([a], [b]) => a - b);
+      for (const [, ref] of entries) {
+        if (ref.getBoundingClientRect().bottom < scrollRect.top + 4) {
+          candidate = ref.dataset.text ?? null;
+        }
+      }
+      setStickyMsg(prev => {
+        if (candidate === prev) return prev;
+        if (candidate) {
+          if (pulseTimer.current) clearTimeout(pulseTimer.current);
+          setStickyPulse(true);
+          pulseTimer.current = setTimeout(() => setStickyPulse(false), 500);
+        }
+        return candidate;
+      });
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [messages]);
+
   useDataRefresh(loadTranscript);
 
   return (
@@ -288,6 +323,18 @@ export function TranscriptPanel({
         {stats && <StatsBar stats={stats} />}
       </div>
 
+      {/* Sticky user message strip */}
+      <div className={`shrink-0 overflow-hidden border-b transition-all duration-200 ${stickyMsg ? "max-h-20 border-zinc-800" : "max-h-0 border-transparent"}`}>
+        <div className="flex flex-row-reverse items-start gap-3 px-4 py-2.5">
+          <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-blue-700 text-white mt-0.5">
+            U
+          </div>
+          <div className={`max-w-[85%] min-w-0 rounded-xl px-4 py-2.5 text-sm bg-blue-900 text-zinc-100 truncate transition-shadow duration-300 ${stickyPulse ? "shadow-[0_2px_16px_rgba(96,165,250,0.25)]" : ""}`}>
+            {stickyMsg}
+          </div>
+        </div>
+      </div>
+
       {/* Scrollable messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         {loading ? (
@@ -299,6 +346,10 @@ export function TranscriptPanel({
             {messages.map((msg, i) => (
               <div
                 key={msg.uuid ?? i}
+                ref={msg.type === "user" ? (el) => {
+                  if (el) { el.dataset.text = msg.text.slice(0, 200); userMsgRefs.current.set(i, el); }
+                  else userMsgRefs.current.delete(i);
+                } : undefined}
                 className={`flex gap-3 ${msg.type === "user" ? "flex-row-reverse" : "flex-row"}`}
               >
                 <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
