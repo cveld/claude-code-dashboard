@@ -49,11 +49,11 @@ export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlug
           Settings
         </Link>
         {refreshCount !== undefined && refreshCount > 0 && (
-          <span
-            className="px-2 py-1 text-xs text-zinc-600 tabular-nums"
-            title={`${refreshCount} data refresh${refreshCount === 1 ? "" : "es"} since page load`}
-          >
+          <span className="relative group px-2 py-1 text-xs text-zinc-600 tabular-nums cursor-default">
             ↺ {refreshCount}
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[200px] rounded bg-zinc-800 border border-zinc-700 px-2 py-1 text-xs text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50 text-center">
+              {refreshCount} live data refresh{refreshCount === 1 ? "" : "es"} since page load
+            </span>
           </span>
         )}
       </div>

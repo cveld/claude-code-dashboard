@@ -86,9 +86,36 @@ export default function SettingsPage() {
         </p>
       )}
 
-      {version && (
-        <p className="text-xs text-zinc-600 mt-6">v{version}</p>
-      )}
+      <h2 className="text-base font-semibold text-white mt-10 mb-4">About</h2>
+      <div className="max-w-2xl bg-zinc-900 rounded-xl divide-y divide-zinc-800">
+        <div className="px-5 py-4 flex items-center justify-between gap-4">
+          <div className="text-sm text-zinc-400">App</div>
+          <div className="text-sm text-zinc-200 font-medium">Claude Code Dashboard</div>
+        </div>
+        {version && (
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div className="text-sm text-zinc-400">Version</div>
+            <div className="text-sm text-zinc-200 font-mono">{version}</div>
+          </div>
+        )}
+        <div className="px-5 py-4 flex items-center justify-between gap-4">
+          <div className="text-sm text-zinc-400">Source</div>
+          <a
+            href="https://github.com/cveld/claude-code-dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            github.com/cveld/claude-code-dashboard
+          </a>
+        </div>
+        <div className="px-5 py-4">
+          <div className="text-xs text-zinc-500">
+            Browse Claude Code sessions and transcripts from{" "}
+            <span className="font-mono text-zinc-400">~/.claude/</span>. Dark theme, local only, no auth.
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
