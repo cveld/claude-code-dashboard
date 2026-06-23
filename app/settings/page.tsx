@@ -11,6 +11,7 @@ interface Settings {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [version, setVersion] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -18,9 +19,11 @@ export default function SettingsPage() {
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/projects").then((r) => r.json()),
-    ]).then(([s, p]) => {
+      fetch("/api/version").then((r) => r.json()),
+    ]).then(([s, p, v]) => {
       setSettings(s);
       setProjects(p);
+      setVersion(v.version ?? null);
     });
   }, []);
 
@@ -81,6 +84,10 @@ export default function SettingsPage() {
         <p className="text-xs text-zinc-500 mt-3">
           {saving ? "Saving…" : "Saved"}
         </p>
+      )}
+
+      {version && (
+        <p className="text-xs text-zinc-600 mt-6">v{version}</p>
       )}
     </div>
   );
