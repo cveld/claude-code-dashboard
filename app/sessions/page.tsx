@@ -143,13 +143,15 @@ function SessionsPageInner() {
     }
     return false;
   });
-  const [sortAsc, setSortAsc] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<"list" | "split">("list");
-
-  useEffect(() => {
-    setSortAsc(localStorage.getItem("sort-asc") === "true");
-    setLayoutMode((localStorage.getItem("sessions-layout") as "list" | "split") ?? "list");
-  }, []);
+  const [sortAsc, setSortAsc] = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("sort-asc") === "true"
+  );
+  const [layoutMode, setLayoutMode] = useState<"list" | "split">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("sessions-layout") as "list" | "split") ?? "list";
+    }
+    return "list";
+  });
   useEffect(() => { localStorage.setItem("sort-asc", String(sortAsc)); }, [sortAsc]);
   useEffect(() => { localStorage.setItem("sessions-layout", layoutMode); }, [layoutMode]);
 
