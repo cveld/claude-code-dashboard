@@ -409,7 +409,7 @@ export function TranscriptPanel({
                     </div>
                   )}
                   {msg.timestamp && (
-                    <div className="mt-2 text-xs text-zinc-600">
+                    <div className="mt-2 text-xs text-zinc-500">
                       {new Date(msg.timestamp).toLocaleTimeString()}
                     </div>
                   )}
