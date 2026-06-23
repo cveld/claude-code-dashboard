@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { loadCache, saveCache, peekJsonlCached } from "@/app/lib/peekJsonl";
+import { resolveCwd } from "@/app/lib/resolveCwd";
 
 export interface SessionWithProject {
   id: string;
@@ -14,10 +15,6 @@ export interface SessionWithProject {
   projectSlug: string;
   projectDisplayPath: string;
   lastInputTokens: number | null;
-}
-
-function slugToPath(slug: string): string {
-  return slug.replace(/^([a-zA-Z])--/, "$1:\\").replace(/-/g, "\\");
 }
 
 export async function GET(req: Request) {
@@ -59,6 +56,9 @@ export async function GET(req: Request) {
       const projectDir = path.join(claudeDir, slug);
       const cache = loadCache(projectDir);
 
+      const jsonlFiles = candidates.map((c) => c.file);
+      const displayPath = resolveCwd(slug, projectDir, jsonlFiles);
+
       const sessions = await Promise.all(
         candidates.map(async ({ file, mtime }) => {
           const filePath = path.join(projectDir, file);
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
             startedAt,
             messageCount,
             projectSlug: slug,
-            projectDisplayPath: slugToPath(slug),
+            projectDisplayPath: displayPath,
             lastInputTokens: lastInputTokens ?? null,
           } as SessionWithProject;
         })

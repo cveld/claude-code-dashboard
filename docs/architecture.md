@@ -21,6 +21,7 @@ Navigatie via `DashboardNav` met `Link` + `usePathname` — geen `viewMode` stat
 | `app/lib/dashboard.ts` | Types + utils: `isUnread`, `timeAgo`, `topSegment` |
 | `app/lib/useDataRefresh.ts` | Hook: SSE-verbinding + debounce → `onRefresh` callback |
 | `app/components/DashboardNav.tsx` | Tab-balk + project-filter pills. Props: `projects`, `unreadCount?`, `projectFilter`, `onFilterChange` |
+| `app/components/TokenUsageBadge.tsx` | Compact token-usage badge rechts in de nav. Pollt `/api/token-usage` slim (op reset-moment). Toont alleen niet-null windows. |
 
 Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 
@@ -38,6 +39,7 @@ Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 | `/api/active-sessions` | GET | Live sessies uit `~/.claude/sessions/*.json` (pid, sessionId, cwd, startedAt, …) |
 | `/api/ide-windows` | GET | Draaiende IDE-vensters uit `~/.claude/ide/*.lock` (alleen levend PID). authToken weggelaten. |
 | `/api/ide-windows/open-file` | POST | `{ port, filePath }` → opent file via MCP-`openFile` over WS + brengt venster naar voorgrond (Windows). |
+| `/api/token-usage` | GET | Leest `~/.claude/.credentials.json` → `claudeAiOauth.accessToken`, roept `https://api.anthropic.com/api/oauth/usage` aan (header `anthropic-beta: oauth-2025-04-20`). Server-side cache 5 min. Geeft `{ five_hour, seven_day, seven_day_sonnet }` terug, elk `{ utilization: number, resets_at: string\|null } \| null`. |
 | `/api/hooks` | POST | Ontvangt Claude-Code hook (`stop`/`notification`), emit op in-memory `hookEmitter`. |
 | `/api/events` | GET (SSE) | Stuurt `change` event bij `.jsonl`-wijziging in `~/.claude/projects/`, én `hook` events uit `hookEmitter`. Heartbeat comment elke 30s. |
 

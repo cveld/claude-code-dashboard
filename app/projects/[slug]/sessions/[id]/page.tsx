@@ -6,6 +6,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useDataRefresh } from "@/app/lib/useDataRefresh";
+import { TokenUsageBadge } from "@/app/components/TokenUsageBadge";
 
 interface TranscriptMessage {
   type: "user" | "assistant" | "system" | "other";
@@ -220,18 +221,21 @@ export default function SessionPage() {
                 </button>
               </div>
             </div>
-            {!loading && (
-              <button
-                onClick={toggleRead}
-                className={`shrink-0 mt-1 text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                  isRead
-                    ? "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-                    : "border-blue-700 text-blue-400 hover:border-blue-500 hover:text-blue-200"
-                }`}
-              >
-                {isRead ? "Mark as unread" : "Mark as read"}
-              </button>
-            )}
+            <div className="shrink-0 flex flex-col items-end gap-2 mt-1">
+              {!loading && (
+                <button
+                  onClick={toggleRead}
+                  className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                    isRead
+                      ? "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      : "border-blue-700 text-blue-400 hover:border-blue-500 hover:text-blue-200"
+                  }`}
+                >
+                  {isRead ? "Mark as unread" : "Mark as read"}
+                </button>
+              )}
+              <TokenUsageBadge />
+            </div>
           </div>
           {stats && <StatsBar stats={stats} />}
         </div>

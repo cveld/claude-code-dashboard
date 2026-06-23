@@ -2,7 +2,7 @@
 
 Overzicht van elk scherm, wat het toont en welke controls/opties beschikbaar zijn. Voor data-types, API-contracten en patronen zie `architecture.md`.
 
-Tabs (in `DashboardNav`): **Projects** (`/`), **Sessions** (`/sessions`), **Settings** (`/settings`). De Sessions-tab toont een blauw unread-getal als `unreadCount > 0`.
+Tabs (in `DashboardNav`): **Projects** (`/`), **Sessions** (`/sessions`), **Settings** (`/settings`). De Sessions-tab toont een blauw unread-getal als `unreadCount > 0`. Rechts in de balk (`ml-auto`): **`TokenUsageBadge`** — mini-progressbars voor actieve rate-limit windows (5h/7d/7d-Sonnet). Kleur: blauw < 70%, amber < 90%, rood ≥ 90%. Hover toont reset-countdown. Toont alleen windows die de API als niet-`null` teruggeeft.
 
 ## Projects (`/`)
 
