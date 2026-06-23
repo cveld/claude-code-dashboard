@@ -113,35 +113,40 @@ export default function Home() {
   const displayedProjects = sortAsc ? [...visibleProjects].reverse() : visibleProjects;
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1 text-zinc-100">Claude Session Browser</h1>
-      <p className="text-zinc-500 text-sm mb-6">All sessions stored in ~/.claude/projects</p>
-
-      <DashboardNav
-        projects={projects}
-        unreadCounts={unreadCountsPerProject}
-        selectedSlugs={selectedSlugs}
-        onSelectedChange={setSelectedSlugs}
-        refreshCount={refreshCount}
-      />
-
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            Projects
-            {visibleProjects.length !== projects.length && (
-              <span className="ml-2 normal-case font-normal text-zinc-600">
-                {visibleProjects.length} of {projects.length}
-              </span>
-            )}
-          </h2>
-          <button
-            onClick={() => setSortAsc((a) => !a)}
-            className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
-          >
-            {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
-          </button>
+    <div className="h-screen flex flex-col overflow-hidden w-full">
+      {/* Sticky header */}
+      <div className="shrink-0 bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
+          <DashboardNav
+            projects={projects}
+            unreadCounts={unreadCountsPerProject}
+            selectedSlugs={selectedSlugs}
+            onSelectedChange={setSelectedSlugs}
+            refreshCount={refreshCount}
+          />
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Projects
+              {visibleProjects.length !== projects.length && (
+                <span className="ml-2 normal-case font-normal text-zinc-600">
+                  {visibleProjects.length} of {projects.length}
+                </span>
+              )}
+            </h2>
+            <button
+              onClick={() => setSortAsc((a) => !a)}
+              className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+            >
+              {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+      <div className="max-w-5xl w-full mx-auto px-4 py-4">
+      <section>
         {loading ? (
           <p className="text-zinc-500 text-sm">Loading…</p>
         ) : visibleProjects.length === 0 ? (
@@ -199,6 +204,8 @@ export default function Home() {
           </div>
         )}
       </section>
+      </div>
+      </div>
     </div>
   );
 }

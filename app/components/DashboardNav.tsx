@@ -19,7 +19,7 @@ export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlug
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-8 w-full">
+    <div className="flex flex-wrap items-center gap-4 mb-2 w-full">
       <div className="flex items-center gap-1 bg-zinc-900 rounded-lg p-1">
         <Link
           href="/"

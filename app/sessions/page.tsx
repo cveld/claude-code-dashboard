@@ -599,24 +599,26 @@ function SessionsPageInner() {
 
   // List mode (default)
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1 text-zinc-100">Claude Session Browser</h1>
-      <p className="text-zinc-500 text-sm mb-6">All sessions stored in ~/.claude/projects</p>
-
-      <DashboardNav
-        projects={projects}
-        unreadCount={unreadCount}
-        unreadCounts={unreadCountsPerProject}
-        selectedSlugs={selectedSlugs}
-        onSelectedChange={setSelectedSlugs}
-        refreshCount={refreshCount}
-      />
-
-      <section>
-        <div className="mb-3">
+    <div className="h-screen flex flex-col overflow-hidden w-full">
+      {/* Sticky header */}
+      <div className="shrink-0 bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
+          <DashboardNav
+            projects={projects}
+            unreadCount={unreadCount}
+            unreadCounts={unreadCountsPerProject}
+            selectedSlugs={selectedSlugs}
+            onSelectedChange={setSelectedSlugs}
+            refreshCount={refreshCount}
+          />
           {controlsBar}
         </div>
+      </div>
 
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+      <div className="max-w-5xl w-full mx-auto px-4 py-4">
+      <section>
         {loading ? (
           <p className="text-zinc-500 text-sm">Loading…</p>
         ) : visibleSessions.length === 0 ? (
@@ -810,6 +812,8 @@ function SessionsPageInner() {
           </div>
         )}
       </section>
+      </div>
+      </div>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-100 text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">

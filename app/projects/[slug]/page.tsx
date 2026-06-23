@@ -165,50 +165,52 @@ export default function ProjectPage() {
   const visibleSessions = sortAsc ? [...filteredSessions].reverse() : filteredSessions;
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← All projects</Link>
-        <h1 className="text-xl font-bold mt-2 font-mono text-zinc-100 break-all">{displayPath}</h1>
-        <p className="text-zinc-600 text-xs mt-1">{decodeURIComponent(slug)}</p>
-      </div>
-
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          Sessions
-          {!loading && (
-            <span className="ml-2 normal-case font-normal text-zinc-600">
-              {visibleSessions.length}
-            </span>
-          )}
-        </h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSortAsc((a) => !a)}
-            className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
-          >
-            {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
-          </button>
-          <div className="flex rounded-md overflow-hidden border border-zinc-700">
-            <button
-              onClick={() => setShowUnreadOnly(false)}
-              className={`text-xs px-3 py-1 transition-colors ${
-                !showUnreadOnly ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setShowUnreadOnly(true)}
-              className={`text-xs px-3 py-1 transition-colors border-l border-zinc-700 ${
-                showUnreadOnly ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Unread
-            </button>
+    <div className="h-screen flex flex-col overflow-hidden w-full">
+      {/* Sticky header */}
+      <div className="shrink-0 bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← All projects</Link>
+              <h1 className="text-sm font-bold mt-0.5 font-mono text-zinc-100 truncate">{displayPath}</h1>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-4">
+              <span className="text-xs text-zinc-500 uppercase tracking-widest font-semibold">
+                Sessions
+                {!loading && <span className="ml-1.5 normal-case font-normal text-zinc-600">{visibleSessions.length}</span>}
+              </span>
+              <button
+                onClick={() => setSortAsc((a) => !a)}
+                className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+              >
+                {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
+              </button>
+              <div className="flex rounded-md overflow-hidden border border-zinc-700">
+                <button
+                  onClick={() => setShowUnreadOnly(false)}
+                  className={`text-xs px-3 py-1 transition-colors ${
+                    !showUnreadOnly ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setShowUnreadOnly(true)}
+                  className={`text-xs px-3 py-1 transition-colors border-l border-zinc-700 ${
+                    showUnreadOnly ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Unread
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+      <div className="max-w-5xl w-full mx-auto px-4 py-4">
       {loading ? (
         <p className="text-zinc-500 text-sm">Loading…</p>
       ) : visibleSessions.length === 0 ? (
@@ -281,6 +283,8 @@ export default function ProjectPage() {
           })}
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }
