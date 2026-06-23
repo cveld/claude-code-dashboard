@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ProjectInfo } from "@/app/lib/dashboard";
 import { ProjectFilter } from "./ProjectFilter";
+import { TokenUsageBadge } from "./TokenUsageBadge";
 
 interface Props {
   projects: ProjectInfo[];
@@ -18,7 +19,7 @@ export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlug
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-8">
+    <div className="flex flex-wrap items-center gap-4 mb-8 w-full">
       <div className="flex items-center gap-1 bg-zinc-900 rounded-lg p-1">
         <Link
           href="/"
@@ -65,6 +66,7 @@ export function DashboardNav({ projects, unreadCount, unreadCounts, selectedSlug
           unreadCounts={unreadCounts}
         />
       )}
+      <TokenUsageBadge />
     </div>
   );
 }
