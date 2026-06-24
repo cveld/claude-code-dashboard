@@ -29,7 +29,7 @@ trap "rm -f \"`$READY\"" EXIT
 HB=`$!
 tail -f -n 0 "`$FILE" | while IFS= read -r line; do
   [ -f "`$READY" ] || break
-  python3 -c "
+  python -c "
 import sys, json
 try:
     d = json.loads(sys.argv[1])
