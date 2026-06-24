@@ -42,7 +42,8 @@ Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 | `/api/token-usage` | GET | Leest `~/.claude/.credentials.json` → `claudeAiOauth.accessToken`, roept `https://api.anthropic.com/api/oauth/usage` aan (header `anthropic-beta: oauth-2025-04-20`). Server-side cache 5 min. Geeft `{ five_hour, seven_day, seven_day_sonnet }` terug, elk `{ utilization: number, resets_at: string\|null } \| null`. |
 | `/api/hooks` | POST | Ontvangt Claude-Code hook (`stop`/`notification`), emit op in-memory `hookEmitter`. |
 | `/api/events` | GET (SSE) | Stuurt `change` event bij `.jsonl`-wijziging in `~/.claude/projects/`, én `hook` events uit `hookEmitter`. Heartbeat comment elke 30s. |
-| `/api/sessions/[id]/send-message` | POST | Stuurt bericht naar een Claude-sessie via `@anthropic-ai/claude-agent-sdk`. Body: `{ message: string }`. Gebruikt `query({ prompt: message, options: { resume: sessionId } })` en itereert de AsyncGenerator om assistant-tekst te verzamelen. Keert terug `{ ok: true, output: string }`. |
+| `/api/sessions/[id]/send-message` | POST | Schrijft `{ message }` als JSON-regel naar `~/.claude/sessions/<id>-inbox.jsonl`. Keert terug `{ ok: true }`. |
+| `/api/monitor-active-sessions` | GET | Geeft `string[]` terug van session-IDs waarvoor `~/.claude/sessions/<id>-monitor.ready` bestaat. |
 
 ## Data types
 
@@ -197,26 +198,23 @@ setSessions(prev => {
 
 Claude-Code hooks POSTen naar `/api/hooks`. De route bouwt een `HookEvent` (`type`, `sessionId`, `projectSlug`, `message?`, `title?`, `timestamp`) en doet `hookEmitter.emit("hook", event)`. De emitter is een globalThis-singleton (`app/lib/hookEvents.ts`) zodat hij hot-reload en route-isolatie overleeft. `/api/events` relayed het naar de browser; `/sessions` toont een dot (groen=stop, amber=notification) + browser-`Notification`. Zie `screens.md`.
 
-## Experiments
+## Send message to session
 
-Experimentele features worden beheerd met `localStorage`, los van de server-side `dashboard-settings.json`.
+Altijd actief (geen feature flag). Beschikbaar in list-mode van `/sessions` én in `TranscriptPanel`.
 
-| localStorage key | Feature | Waar zichtbaar |
-|---|---|---|
-| `exp-send-message` | "Send message to session" | Sessions list-mode: "Send →" knop op tile-hover → modal |
-
-**Patroon voor nieuwe experiments:**
-- Toggle in `app/settings/page.tsx` → Experiments sectie, leest/schrijft `localStorage`
-- Gebruik in feature-pagina: `useState(() => localStorage.getItem("exp-...") === "true")` — initializer pattern zodat de state correct is na SPA-navigatie
-- Geen server-side opslag, geen `/api/settings` aanroep
-
-**Agent SDK send-message flow:**
-1. User klikt "Send →" (verschijnt on-hover, alleen in list mode)
-2. Modal opent met sessietitel + UUID + textarea (Ctrl+Enter verstuurt)
-3. POST `/api/sessions/[id]/send-message` → SDK `query()` met `resume: sessionId`
+**Send → modal (list-mode):**
+1. User klikt "Send →" (on-hover op sessie-tile)
+2. Modal toont sessietitel, session-GUID, en Step 1: Monitor tool call + Step 2: textarea
+3. POST `/api/sessions/[id]/send-message` → schrijft naar `~/.claude/sessions/<id>-inbox.jsonl`
 4. Response (of fout) getoond in modal
 
-Bestand: `app/api/sessions/[id]/send-message/route.ts`
+**Monitor setup:** `app/lib/monitorToolCall.ts` genereert de JSON voor het Monitor-tool call dat Claude Code moet uitvoeren. Maakt `<id>-inbox.jsonl` en `<id>-monitor.ready` aan; verwijdert `.ready` bij exit.
+
+**Monitor active check:** `GET /api/monitor-active-sessions` (`app/api/monitor-active-sessions/route.ts`) geeft array van session-IDs terug waarvoor een `.ready`-bestand bestaat. Wordt elke 10s gepolled door `sessions/page.tsx` en `TranscriptPanel`. Groene dot = monitor actief.
+
+**TranscriptPanel send-paneel:** onderaan het transcript, altijd zichtbaar. Als monitor actief: inline textarea + Send knop. Als niet actief: "No monitor running" + "Setup monitor →" knop (opent modal met de Monitor tool call).
+
+Bestanden: `app/api/sessions/[id]/send-message/route.ts`, `app/api/monitor-active-sessions/route.ts`, `app/lib/monitorToolCall.ts`
 
 ## IDE-windows
 
