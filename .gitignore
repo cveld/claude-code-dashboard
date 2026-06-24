@@ -45,3 +45,4 @@ next-env.d.ts
 
 # Local screenshot output (scripts/screenshot.mjs)
 screenshots/
+test-results
