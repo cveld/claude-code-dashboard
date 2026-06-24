@@ -17,6 +17,7 @@ import {
   timeAgo,
 } from "../lib/dashboard";
 import { useDataRefresh, type ChangeEvent } from "../lib/useDataRefresh";
+import { buildMonitorToolCall } from "../lib/monitorToolCall";
 
 const CONTEXT_WINDOW = 200000;
 
@@ -126,6 +127,7 @@ function IconSplit() {
   );
 }
 
+
 function SessionsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -156,17 +158,35 @@ function SessionsPageInner() {
   useEffect(() => { localStorage.setItem("sessions-layout", layoutMode); }, [layoutMode]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [tailCache, setTailCache] = useState<Record<string, TailMessage[]>>({});
   const [tailSize, setTailSize] = useState<Record<string, number>>({});
   const [changedSessions, setChangedSessions] = useState<Set<string>>(new Set());
   const [hookNotifs, setHookNotifs] = useState<Record<string, HookEvent>>({});
   const [refreshCount, setRefreshCount] = useState(0);
+  const [monitorActiveSessions, setMonitorActiveSessions] = useState<Set<string>>(new Set());
+  const [sendModalSession, setSendModalSession] = useState<SessionWithProject | null>(null);
+  const [sendMessage, setSendMessage] = useState("");
+  const [sendLoading, setSendLoading] = useState(false);
+  const [sendResult, setSendResult] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
     sessionStorage.setItem("sessions-unread-only", String(showUnreadOnly));
   }, [showUnreadOnly]);
+
+  useEffect(() => {
+    function pollMonitors() {
+      fetch("/api/monitor-active-sessions")
+        .then((r) => r.json())
+        .then((ids: string[]) => setMonitorActiveSessions(new Set(ids)))
+        .catch(() => {});
+    }
+    pollMonitors();
+    const interval = setInterval(pollMonitors, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const sessionsRef = useRef<SessionWithProject[]>([]);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -219,8 +239,8 @@ function SessionsPageInner() {
 
   function copyId(id: string) {
     navigator.clipboard.writeText(id);
-    setToast(true);
-    setTimeout(() => setToast(false), 2000);
+    setToast("Session ID copied to clipboard");
+    setTimeout(() => setToast(null), 2000);
   }
 
   const loadData = useCallback((change?: ChangeEvent) => {
@@ -395,6 +415,46 @@ function SessionsPageInner() {
 
   function selectSession(s: SessionWithProject) {
     router.push(`/sessions?slug=${encodeURIComponent(s.projectSlug)}&id=${encodeURIComponent(s.id)}`);
+  }
+
+  function openSendModal(s: SessionWithProject) {
+    setSendModalSession(s);
+    setSendMessage("");
+    setSendResult(null);
+    setSendError(null);
+  }
+
+  function closeSendModal() {
+    if (sendLoading) return;
+    setSendModalSession(null);
+  }
+
+  async function handleSendMessage() {
+    if (!sendModalSession || !sendMessage.trim() || sendLoading) return;
+    setSendLoading(true);
+    setSendResult(null);
+    setSendError(null);
+    try {
+      const res = await fetch(
+        `/api/sessions/${encodeURIComponent(sendModalSession.id)}/send-message`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: sendMessage }),
+        }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setSendResult("sent");
+        setSendMessage("");
+      } else {
+        setSendError(data.error ?? "Failed to send message.");
+      }
+    } catch {
+      setSendError("Network error.");
+    } finally {
+      setSendLoading(false);
+    }
   }
 
   // Controls bar — shared between list and split mode
@@ -592,7 +652,7 @@ function SessionsPageInner() {
 
         {toast && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-100 text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
-            Session ID copied to clipboard
+            {toast}
           </div>
         )}
       </div>
@@ -726,6 +786,16 @@ function SessionsPageInner() {
                               </Link>
                               <div className="flex items-start gap-1 shrink-0">
                                 <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); openSendModal(s); }}
+                                  title="Send message to this session"
+                                  className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5 flex items-center gap-1"
+                                >
+                                  {monitorActiveSessions.has(s.id) && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                                  )}
+                                  Send →
+                                </button>
+                                <button
                                   onClick={() => markSession(s, !unread)}
                                   title={unread ? "Mark read" : "Mark unread"}
                                   className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5"
@@ -820,6 +890,89 @@ function SessionsPageInner() {
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-100 text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
           Session ID copied to clipboard
+        </div>
+      )}
+
+      {sendModalSession && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={closeSendModal}
+        >
+          <div
+            className="bg-zinc-900 rounded-xl border border-zinc-700 p-6 w-full max-w-lg mx-4 flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-200">Send message to session</h3>
+              <p className="text-xs text-zinc-500 mt-1 font-mono truncate">
+                {sendModalSession.title ?? sendModalSession.firstUserMessage ?? sendModalSession.id}
+              </p>
+              <p className="text-xs text-zinc-600 mt-0.5 font-mono">{sendModalSession.id}</p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium text-zinc-400">
+                Step 1 — paste this Monitor tool call into your Claude Code session:
+              </p>
+              <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-3 flex items-start gap-2">
+                <pre className="text-xs text-zinc-300 font-mono flex-1 leading-relaxed overflow-x-auto whitespace-pre">
+                  {buildMonitorToolCall(sendModalSession.id)}
+                </pre>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(buildMonitorToolCall(sendModalSession.id));
+                    setToast("Copied to clipboard");
+                    setTimeout(() => setToast(null), 2000);
+                  }}
+                  title="Copy tool call"
+                  className="shrink-0 text-xs px-2 py-1 rounded border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium text-zinc-400">
+                Step 2 — type your message:
+              </p>
+              <textarea
+                value={sendMessage}
+                onChange={(e) => setSendMessage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSendMessage(); }}
+                placeholder="Type your message… (Ctrl+Enter to send)"
+                rows={3}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none focus:border-blue-500"
+                autoFocus
+              />
+            </div>
+
+            {sendResult === "sent" && (
+              <p className="text-xs text-green-400">Message appended to session inbox.</p>
+            )}
+            {sendError !== null && (
+              <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3">
+                <p className="text-xs text-red-300">{sendError}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={closeSendModal}
+                disabled={sendLoading}
+                className="text-xs px-3 py-1.5 rounded text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSendMessage}
+                disabled={sendLoading || !sendMessage.trim()}
+                className="text-xs px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendLoading ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

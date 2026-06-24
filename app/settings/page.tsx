@@ -14,7 +14,6 @@ export default function SettingsPage() {
   const [version, setVersion] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),

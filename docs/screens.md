@@ -31,7 +31,7 @@ Tabs (in `DashboardNav`): **Projects** (`/`), **Sessions** (`/sessions`), **Sett
 
 ### List-modus (default)
 
-Sessies gegroepeerd op rolling window (Today/Yesterday/This week/…), groepen collapsible. Per groep: Mark read / Mark unread. Per sessie: unread-dot, tail-expand preview (laatste N berichten inline), per-sessie Mark read/unread, copy session-id. FLIP-animatie bij herordening, `session-updated` pulse bij wijziging (zie `app/globals.css`). Detail in `architecture.md`.
+Sessies gegroepeerd op rolling window (Today/Yesterday/This week/…), groepen collapsible. Per groep: Mark read / Mark unread. Per sessie: unread-dot, tail-expand preview (laatste N berichten inline), per-sessie Mark read/unread, copy session-id, **Send →** (alleen als experiment `exp-send-message` aan). FLIP-animatie bij herordening, `session-updated` pulse bij wijziging (zie `app/globals.css`). Detail in `architecture.md`.
 
 ### Split-modus
 
@@ -58,11 +58,21 @@ Layout: `h-screen` root, **sticky top-bar** (`shrink-0` met nav + controls), daa
 
 ## Settings (`/settings`)
 
-`app/settings/page.tsx` — toggle-lijst, leest/schrijft `/api/settings` (`~/.claude/dashboard-settings.json`).
+`app/settings/page.tsx` — drie secties: Settings, Experiments, About.
+
+### Settings
+Leest/schrijft `/api/settings` (`~/.claude/dashboard-settings.json`).
 
 | Optie | Default | Effect |
 |---|---|---|
 | Auto-mark as read on open | `false` | Aan: transcript openen markeert automatisch als gelezen. Uit: gebruik de Mark as read-knop |
+
+### Experiments
+Opgeslagen in `localStorage`, niet in dashboard-settings.json. Staan standaard **uit**.
+
+| Optie | localStorage key | Effect |
+|---|---|---|
+| Send message to session | `exp-send-message` | Toont "Send →" knop op session-tiles in list mode |
 
 ## IDE-windows
 
