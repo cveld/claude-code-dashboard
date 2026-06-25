@@ -6,9 +6,8 @@ export function buildMonitorToolCall(sessionId: string): string {
     `READY="${readyPath}"`,
     `touch "$FILE" "$READY"`,
     `trap "rm -f \\"$READY\\"" EXIT`,
-    // Heartbeat: touch the ready file every 20s so the dashboard can verify
-    // liveness by mtime without needing to resolve the WSL bash PID on Windows.
-    `(while [ -f "$READY" ]; do touch "$READY"; sleep 20; done) &`,
+    `PARENT=$$`,
+    `(while [ -f "$READY" ] && kill -0 $PARENT 2>/dev/null; do touch "$READY"; sleep 20; done) &`,
     `HB=$!`,
     `tail -f -n 0 "$FILE" | while IFS= read -r line; do`,
     `  [ -f "$READY" ] || break`,
