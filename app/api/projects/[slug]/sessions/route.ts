@@ -32,14 +32,14 @@ export async function GET(
     files.map(async (f) => {
       const filePath = path.join(projectDir, f);
       const stat = fs.statSync(filePath);
-      const { startedAt, messageCount, firstUserMessage, title, lastInputTokens } = await peekJsonlCached(filePath, f, stat.mtime, cache);
+      const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt } = await peekJsonlCached(filePath, f, stat.mtime, cache);
       return {
         id: f.replace(".jsonl", ""),
         title,
         startedAt,
         messageCount,
         firstUserMessage,
-        lastActivity: stat.mtime.toISOString(),
+        lastActivity: lastMessageAt ?? stat.mtime.toISOString(),
         lastInputTokens: lastInputTokens ?? null,
       } as SessionInfo;
     })

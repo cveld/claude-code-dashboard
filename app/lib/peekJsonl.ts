@@ -8,6 +8,7 @@ export type PeekResult = {
   firstUserMessage: string | null;
   title: string | null;
   lastInputTokens: number | null;
+  lastMessageAt: string | null;
 };
 
 type CacheEntry = PeekResult & { mtime: string };
@@ -40,6 +41,7 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
     let aiTitle: string | null = null;
     let customTitle: string | null = null;
     let lastInputTokens: number | null = null;
+    let lastMessageAt: string | null = null;
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -61,12 +63,15 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
         if (obj.type === "assistant" && obj.message?.usage?.input_tokens != null) {
           lastInputTokens = obj.message.usage.input_tokens;
         }
+        if ((obj.type === "user" || obj.type === "assistant") && obj.timestamp) {
+          lastMessageAt = obj.timestamp;
+        }
       } catch {
         // skip malformed lines
       }
     });
 
-    rl.on("close", () => resolve({ startedAt, messageCount: count, firstUserMessage, title: customTitle ?? aiTitle, lastInputTokens }));
+    rl.on("close", () => resolve({ startedAt, messageCount: count, firstUserMessage, title: customTitle ?? aiTitle, lastInputTokens, lastMessageAt }));
   });
 }
 

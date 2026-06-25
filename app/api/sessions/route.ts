@@ -62,12 +62,12 @@ export async function GET(req: Request) {
       const sessions = await Promise.all(
         candidates.map(async ({ file, mtime }) => {
           const filePath = path.join(projectDir, file);
-          const { startedAt, messageCount, firstUserMessage, title, lastInputTokens } = await peekJsonlCached(filePath, file, mtime, cache);
+          const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt } = await peekJsonlCached(filePath, file, mtime, cache);
           return {
             id: file.replace(".jsonl", ""),
             title,
             firstUserMessage,
-            lastActivity: mtime.toISOString(),
+            lastActivity: lastMessageAt ?? mtime.toISOString(),
             startedAt,
             messageCount,
             projectSlug: slug,
