@@ -93,16 +93,19 @@ function IconBell() {
   );
 }
 
-function HookBadge({ type }: { type: "stop" | "notification" }) {
+function HookBadge({ type, read }: { type: "stop" | "notification"; read?: boolean }) {
   if (type === "stop") {
     return (
-      <span className="w-4 h-4 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center shrink-0 mt-0.5">
+      <span
+        title={read ? "Completed (read)" : "Completed (unread)"}
+        className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${read ? "bg-zinc-500/20 text-zinc-500" : "bg-green-500/20 text-green-400"}`}
+      >
         <IconCheck />
       </span>
     );
   }
   return (
-    <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+    <span title="Notification" className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
       <IconBell />
     </span>
   );
@@ -257,11 +260,13 @@ function SessionsPageInner() {
     ];
     if (isInitial) {
       promises.push(fetch("/api/read-state").then((r) => r.json()));
+      promises.push(fetch("/api/hook-events").then((r) => r.json()));
     }
 
     Promise.all(promises).then((results) => {
       const [p, newSessions] = results as [ProjectInfo[], SessionWithProject[]];
       const rs = isInitial ? (results[2] as Record<string, string>) : undefined;
+      const persistedHooks = isInitial ? (results[3] as Record<string, HookEvent>) : undefined;
 
       const allSessions: SessionWithProject[] = change?.slug
         ? (() => {
@@ -296,6 +301,7 @@ function SessionsPageInner() {
       setProjects(p);
       setSessions(allSessions);
       if (rs !== undefined) setReadState(rs);
+      if (persistedHooks !== undefined) setHookNotifs(persistedHooks);
       setLoading(false);
     });
   }, []);
@@ -570,9 +576,12 @@ function SessionsPageInner() {
                           }`}
                         >
                           {splitHookNotif ? (
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${splitHookNotif.type === "stop" ? "bg-green-400" : "bg-amber-400"}`} />
+                            <span
+                              title={splitHookNotif.type === "stop" ? (unread ? "Completed (unread)" : "Completed (read)") : "Notification"}
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${splitHookNotif.type === "stop" ? (unread ? "bg-green-400" : "bg-zinc-500") : "bg-amber-400"}`}
+                            />
                           ) : unread ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0 mt-1.5" />
+                            <span title="Unread" className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0 mt-1.5" />
                           ) : (
                             <span className="w-1.5 h-1.5 shrink-0" />
                           )}
@@ -754,9 +763,9 @@ function SessionsPageInner() {
                           >
                             <div className="flex items-start gap-4 px-4 py-3 hover:bg-zinc-800 transition-colors group">
                               {hookNotif ? (
-                                <HookBadge type={hookNotif.type} />
+                                <HookBadge type={hookNotif.type} read={!unread} />
                               ) : unread ? (
-                                <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0 mt-1" />
+                                <span title="Unread" className="w-2 h-2 rounded-full bg-blue-400 shrink-0 mt-1" />
                               ) : (
                                 <span className="w-2 h-2 shrink-0" />
                               )}

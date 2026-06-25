@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hookEmitter } from "@/app/lib/hookEvents";
+import { setHookEvent } from "@/app/lib/hookStore";
 import type { HookEvent } from "@/app/lib/dashboard";
 
 export const runtime = "nodejs";
@@ -27,5 +28,6 @@ export async function POST(req: NextRequest) {
   };
 
   hookEmitter.emit("hook", event);
+  setHookEvent(event);
   return NextResponse.json({ ok: true });
 }

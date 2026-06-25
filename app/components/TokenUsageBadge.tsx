@@ -12,6 +12,11 @@ function formatTimeRemaining(resetsAt: string | null): string {
   const totalMin = Math.ceil(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d}d${rh}h` : `${d}d`;
+  }
   return h > 0 ? `${h}h${m > 0 ? `${m}m` : ""}` : `${m}m`;
 }
 
