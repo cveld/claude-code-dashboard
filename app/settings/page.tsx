@@ -395,6 +395,25 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* ── Developer ─────────────────────────────────────────────────── */}
+      <h2 className="text-base font-semibold text-white mt-10 mb-4">Developer</h2>
+      <div className="max-w-2xl bg-zinc-900 rounded-xl divide-y divide-zinc-800">
+        <div className="px-5 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-zinc-200">Component gallery</div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Visual validation of all session tile states with fixture data. Returns 404 in production.
+            </div>
+          </div>
+          <a
+            href="/gallery"
+            className="text-xs text-blue-400 hover:text-blue-300 border border-zinc-700/60 hover:border-zinc-600 rounded px-3 py-1.5 transition-colors whitespace-nowrap"
+          >
+            Open gallery →
+          </a>
+        </div>
+      </div>
+
       {/* ── Snippet modal ──────────────────────────────────────────────── */}
       {activeBlock && (
         <SnippetModal block={activeBlock} onClose={() => setActiveBlock(null)} />

@@ -9,6 +9,7 @@
 | `/settings` | `app/settings/page.tsx` | Toggle-instellingen (`autoMarkAsRead`) |
 | `/projects/[slug]` | `app/projects/[slug]/page.tsx` | Sessies van één project, met per-sessie Mark read/unread knop |
 | `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript (rendert `TranscriptPanel`) |
+| `/gallery` | `app/gallery/page.tsx` | Dev-only component gallery — fixture tiles voor visuele validatie. Retourneert 404 in production (`NODE_ENV === "production"`). Geen API-calls, geen state. |
 
 Schermen + opties per route staan in `screens.md`.
 

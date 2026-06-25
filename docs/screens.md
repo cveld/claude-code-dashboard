@@ -56,12 +56,35 @@ Layout: `h-screen` root, **sticky top-bar** (`shrink-0` met nav + controls), daa
 - Berichten scrollen in eigen `flex-1 overflow-y-auto`. Auto-scroll naar bodem bij open en bij nieuwe berichten als je near-bottom was.
 - Auto-mark-as-read bij open **alleen als** `settings.autoMarkAsRead` aan staat; anders handmatig via de knop.
 
+## Gallery (`/gallery`)
+
+`app/gallery/page.tsx` — dev-only server component. Retourneert 404 als `NODE_ENV === "production"`.
+
+Bedoeld voor visuele validatie na styling-wijzigingen en als basis voor Playwright-screenshots (`node scripts/screenshot.mjs /gallery`).
+
+Toegankelijk via **Settings → Developer → Open gallery →**.
+
+Twee secties met fixture-tiles (hardcoded data, geen fetch):
+
+| Sectie | Fixtures |
+|---|---|
+| Status indicators | Unread (blauw bolletje), Read, Unread + completed (groen vinkje), Read + completed (grijs vinkje), Notification (amber bell) |
+| Session tiles | Monitor active (groene dot op Send-knop), Context low 30% (blauwe balk), Context high 80% (oranje), Context critical 95% (rood), Long title (truncatie) |
+
+Elke tile toont dezelfde Tailwind-classes als de echte sessie-tile in `app/sessions/page.tsx` — knoppen zijn zichtbaar maar niet klikbaar (geen handlers).
+
 ## Settings (`/settings`)
 
-`app/settings/page.tsx` — twee secties: Settings, About.
+`app/settings/page.tsx` — drie secties: Settings, Setting up hooks, Developer, About.
 
 ### Settings
 Leest/schrijft `/api/settings` (`~/.claude/dashboard-settings.json`).
+
+### Developer
+
+| Link | Doel |
+|---|---|
+| Open gallery → | Navigeert naar `/gallery` (altijd zichtbaar; route zelf geeft 404 in production) |
 
 | Optie | Default | Effect |
 |---|---|---|
