@@ -28,7 +28,7 @@ async function parseStats(filePath: string): Promise<SessionStats> {
         const obj = JSON.parse(line);
         if (obj.type === "assistant" && obj.message?.usage) {
           const u = obj.message.usage;
-          if (u.input_tokens != null) currentContext = u.input_tokens;
+          if (u.input_tokens != null) currentContext = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
           totalOutputTokens += u.output_tokens ?? 0;
           totalCacheCreation += u.cache_creation_input_tokens ?? 0;
           totalCacheRead += u.cache_read_input_tokens ?? 0;

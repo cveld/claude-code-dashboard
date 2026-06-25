@@ -60,8 +60,13 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
             if (textBlock?.text) firstUserMessage = textBlock.text.slice(0, 120);
           }
         }
-        if (obj.type === "assistant" && obj.message?.usage?.input_tokens != null) {
-          lastInputTokens = obj.message.usage.input_tokens;
+        if (obj.type === "assistant" && obj.message?.usage) {
+          const u = obj.message.usage;
+          if (u.input_tokens != null) {
+            lastInputTokens = (u.input_tokens ?? 0)
+              + (u.cache_creation_input_tokens ?? 0)
+              + (u.cache_read_input_tokens ?? 0);
+          }
         }
         if ((obj.type === "user" || obj.type === "assistant") && obj.timestamp) {
           lastMessageAt = obj.timestamp;
