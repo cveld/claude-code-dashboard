@@ -56,25 +56,22 @@ Toggle verschijnt alleen als het geselecteerde width een generiek preset heeft �
 
 `CHROME_BAR_H = 56px`. Fake Chrome Android adresbalk: donkere bg (`#202124`), adrespil met lock-icoon + `localhost:3000<path>`, tab-teller, kebab-menu.
 
-**Twee discrete staten** (geen scrollY-listener):
-Echt Android Chrome verbergt de adresbalk via een browser-level gesture *voordat* `scrollY` begint te tellen — scrollY=0 is dus de "bar weg"-staat. We modelleren dit als twee knoppen:
+Bar scrollt weg via scroll-listener op het same-origin iframe:
+- `barScrollOffset = min(iframe.contentWindow.scrollY, CHROME_BAR_H)` — passive scroll listener, opnieuw gekoppeld bij elke `frameKey`-wissel
+- Inner wrapper krijgt `translateY(-barScrollOffset)` → bar schuift achter de `overflow:hidden` clip edge
 
-- `chrome bar` aan → bar zichtbaar, `barHidden=false`
-- `scrolled` aan → bar weg, `barHidden=true`, CSS transition `translateY(-56px)` op de inner wrapper
-
-Hoogte-logica:
-- `renderedH` = content viewport hoogte (`window.innerHeight` met bar zichtbaar)
-- `iframeFullH = renderedH + CHROME_BAR_H` — iframe heeft altijd deze hoogte
-- `barOffset = barHidden ? CHROME_BAR_H : 0` → inner wrapper schuift omhoog
-- `containerH = iframeFullH * scale` — constant, verandert niet bij toggle
+Hoogte-model — `renderedH` = content viewport hoogte (`window.innerHeight` met bar zichtbaar):
+- `iframeFullH = renderedH + CHROME_BAR_H` — **constant**, iframe krijgt altijd deze hoogte, geen resize mid-scroll
+- `barOffset = barScrollOffset` (0 → 56) → inner wrapper schuift omhoog
+- `containerH = iframeFullH * scale` — constant
+- Netto effect: bar verdwijnt boven, extra iframe-hoogte vult onder in → viewport groeit van `renderedH` naar `renderedH + CHROME_BAR_H`
 
 ### Toggles (controls-rij)
 
 | Toggle | State | Effect |
 |---|---|---|
 | `{preset.label} ×{h}px` | `clipActive` | Kapt hoogte af, iframe rendert op device-height |
-| `chrome bar` | `showAddressBar` | Toont `ChromeBar` boven iframe |
-| `scrolled` | `barHidden` | Schuift bar weg (zichtbaar als `showAddressBar` aan is) |
+| `chrome bar` | `showAddressBar` | Toont `ChromeBar` boven iframe (scrollt weg bij scrollen in iframe) |
 | `dimensions` | `showDimensions` | Badge bottom-right van viewer: `width × renderedH` |
 
 ### Dimensions-badge positie
