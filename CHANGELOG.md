@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/cveld/claude-code-dashboard/compare/v0.3.0...v0.4.0) (2026-06-28)
+
+
+### Features
+
+* gallery responsive viewer with phone device presets ([c1a3ba6](https://github.com/cveld/claude-code-dashboard/commit/c1a3ba635dd1ab8cbb4e3e6dd9052d9c08274f11))
+* **mobile:** improve sessions list mobile experience ([a91fd81](https://github.com/cveld/claude-code-dashboard/commit/a91fd81c3675d4fda5671075b95b09e65278dd93))
+* natural scroll on list pages for mobile address bar hiding ([dbfd7a9](https://github.com/cveld/claude-code-dashboard/commit/dbfd7a908139e6f333fcf8eb7c780df1305ab2db))
+
 ## [0.3.0](https://github.com/cveld/claude-code-dashboard/compare/v0.2.0...v0.3.0) (2026-06-25)
 
 
