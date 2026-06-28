@@ -142,6 +142,31 @@ export function ResponsiveViewer() {
     };
   }, [showAddressBar, frameKey]);
 
+  // Inject thin-scrollbar CSS to simulate mobile overlay scrollbars (Android Chrome ~3px).
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const inject = () => {
+      const doc = iframe.contentDocument;
+      if (!doc?.head) return;
+      if (doc.getElementById('gallery-scrollbar-override')) return;
+      const style = doc.createElement('style');
+      style.id = 'gallery-scrollbar-override';
+      style.textContent = [
+        '::-webkit-scrollbar { width: 3px; height: 3px; }',
+        '::-webkit-scrollbar-track { background: transparent; }',
+        '::-webkit-scrollbar-thumb { background: rgba(150,150,150,0.35); border-radius: 2px; }',
+        '* { scrollbar-width: thin; scrollbar-color: rgba(150,150,150,0.35) transparent; }',
+        // Simulate touch: show hover-only elements (opacity-0 group-hover:opacity-100 pattern).
+        '.group-hover\\:opacity-100 { opacity: 1 !important; }',
+      ].join('\n');
+      doc.head.appendChild(style);
+    };
+    iframe.addEventListener('load', inject);
+    if (iframe.contentDocument?.readyState === 'complete') inject();
+    return () => iframe.removeEventListener('load', inject);
+  }, [frameKey]);
+
   function switchWidth(w: number) {
     setWidth(w);
     setActiveDevice(null);

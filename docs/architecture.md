@@ -89,7 +89,8 @@ Alle lijstpagina's hebben een "↓ Newest first / ↑ Oldest first" toggle knop.
 ### Per-sessie Mark read/unread knop
 
 Beide lijstpagina's (`/sessions` en `/projects/[slug]`) hebben per-sessie knoppen:
-- Verschijnen on-hover: `opacity-0 group-hover:opacity-100`
+- Verschijnen on-hover: `opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100`
+- `[@media(hover:none)]` zorgt dat ze op touch-apparaten altijd zichtbaar zijn (geen hover-event beschikbaar)
 - Knop staat **buiten** de `<Link>` — de outer div heeft `group hover:bg-zinc-800`
 - Structuur in `app/projects/[slug]/page.tsx`:
   ```

@@ -56,6 +56,17 @@ Toggle verschijnt alleen als het geselecteerde width een generiek preset heeft �
 
 `CHROME_BAR_H = 56px`. Fake Chrome Android adresbalk: donkere bg (`#202124`), adrespil met lock-icoon + `localhost:3000<path>`, tab-teller, kebab-menu.
 
+### CSS-injectie in het iframe
+
+Na elke `frameKey`-wissel injecteert `ResponsiveViewer` een `<style id="gallery-scrollbar-override">` in het iframe-document. Twee doelen:
+
+| CSS | Reden |
+|---|---|
+| `::-webkit-scrollbar { width: 3px }` + `scrollbar-width: thin` | Simuleert Android Chrome overlay-scrollbars (~3px, geen layout-impact) |
+| `.group-hover\:opacity-100 { opacity: 1 !important }` | Simuleert touch: maakt alle `opacity-0 group-hover:opacity-100` knoppen altijd zichtbaar |
+
+Implementatie: `useEffect` met `[frameKey]` dependency, attach op `load`-event van de iframe, guard op `getElementById('gallery-scrollbar-override')` om dubbele injectie te voorkomen.
+
 Bar scrollt weg via scroll-listener op het same-origin iframe:
 - `barScrollOffset = min(iframe.contentWindow.scrollY, CHROME_BAR_H)` — passive scroll listener, opnieuw gekoppeld bij elke `frameKey`-wissel
 - Inner wrapper krijgt `translateY(-barScrollOffset)` → bar schuift achter de `overflow:hidden` clip edge

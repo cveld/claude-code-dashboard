@@ -31,7 +31,16 @@ Tabs (in `DashboardNav`): **Projects** (`/`), **Sessions** (`/sessions`), **Sett
 
 ### List-modus (default)
 
-Sessies gegroepeerd op rolling window (Today/Yesterday/This week/…), groepen collapsible. Per groep: Mark read / Mark unread. Per sessie: unread-dot, tail-expand preview (laatste N berichten inline), per-sessie Mark read/unread, copy session-id, **Send →** (on-hover). FLIP-animatie bij herordening, `session-updated` pulse bij wijziging (zie `app/globals.css`). Detail in `architecture.md`.
+Sessies gegroepeerd op rolling window (Today/Yesterday/This week/…), groepen collapsible. Per groep: Mark read / Mark unread. FLIP-animatie bij herordening, `session-updated` pulse bij wijziging (zie `app/globals.css`). Detail in `architecture.md`.
+
+**Session card — twee-rijen layout:**
+
+| Rij | Links | Rechts |
+|---|---|---|
+| 1 | Sessietitel (truncated, Link naar transcript) | `timeAgo` (shrink-0) |
+| 2 | projectDisplayPath (mono, truncated) + copy-id btn + msgs + ctx% | Send → + Mark read/unread + expand ▶ |
+
+Acties (Send →, Mark read/unread, copy-id) zijn `opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100` — onzichtbaar op desktop tot hover, altijd zichtbaar op touch-apparaten.
 
 ### Split-modus
 

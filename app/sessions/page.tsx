@@ -761,7 +761,7 @@ function SessionsPageInner() {
                             }}
                             className="rounded-lg bg-zinc-900 overflow-hidden"
                           >
-                            <div className="flex items-start gap-4 px-4 py-3 hover:bg-zinc-800 transition-colors group">
+                            <div className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors group">
                               {hookNotif ? (
                                 <HookBadge type={hookNotif.type} read={!unread} />
                               ) : unread ? (
@@ -769,68 +769,74 @@ function SessionsPageInner() {
                               ) : (
                                 <span className="w-2 h-2 shrink-0" />
                               )}
-                              <Link
-                                href={`/projects/${encodeURIComponent(s.projectSlug)}/sessions/${encodeURIComponent(s.id)}?from=sessions`}
-                                className="flex-1 min-w-0"
-                                onClick={() => sessionStorage.setItem("sessions-scroll-y", String(window.scrollY))}
-                              >
-                                <div className="text-sm text-zinc-200 group-hover:text-white truncate">
-                                  {s.title ?? s.firstUserMessage ?? (
-                                    <span className="italic text-zinc-500">Untitled</span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                                  <span className="text-xs text-zinc-500 truncate font-mono">{s.projectDisplayPath}</span>
-                                  <button
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyId(s.id); }}
-                                    title="Copy session ID"
-                                    className="shrink-0 text-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                              <div className="flex-1 min-w-0">
+                                {/* Row 1: title + time-ago */}
+                                <div className="flex items-start justify-between gap-2">
+                                  <Link
+                                    href={`/projects/${encodeURIComponent(s.projectSlug)}/sessions/${encodeURIComponent(s.id)}?from=sessions`}
+                                    className="flex-1 min-w-0"
+                                    onClick={() => sessionStorage.setItem("sessions-scroll-y", String(window.scrollY))}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                    </svg>
-                                  </button>
+                                    <div className="text-sm text-zinc-200 group-hover:text-white truncate">
+                                      {s.title ?? s.firstUserMessage ?? (
+                                        <span className="italic text-zinc-500">Untitled</span>
+                                      )}
+                                    </div>
+                                  </Link>
+                                  <span className="text-xs text-zinc-600 shrink-0 mt-0.5">{timeAgo(s.lastActivity)}</span>
                                 </div>
-                              </Link>
-                              <div className="flex items-start gap-1 shrink-0">
-                                <button
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); openSendModal(s); }}
-                                  title="Send message to this session"
-                                  className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5 flex items-center gap-1"
-                                >
-                                  {monitorActiveSessions.has(s.id) && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                                  )}
-                                  Send →
-                                </button>
-                                <button
-                                  onClick={() => markSession(s, !unread)}
-                                  title={unread ? "Mark read" : "Mark unread"}
-                                  className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap mt-0.5"
-                                >
-                                  {unread ? "Mark read" : "Mark unread"}
-                                </button>
-                                <div className="text-right">
-                                  <div className="text-xs text-zinc-600">{timeAgo(s.lastActivity)}</div>
-                                  <div className="text-xs text-zinc-600 mt-0.5">{s.messageCount} msgs</div>
-                                  {ctxPct !== null && (
-                                    <div className={`text-xs mt-0.5 tabular-nums ${ctxPct >= 75 ? "text-orange-500" : "text-zinc-600"}`}>{ctxPct}% ctx</div>
-                                  )}
+                                {/* Row 2: path + msgs + ctx + actions */}
+                                <div className="flex items-center justify-between gap-1 mt-0.5">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-xs text-zinc-500 truncate font-mono">{s.projectDisplayPath}</span>
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyId(s.id); }}
+                                      title="Copy session ID"
+                                      className="shrink-0 text-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                      </svg>
+                                    </button>
+                                    <span className="text-xs text-zinc-600 shrink-0">{s.messageCount} msgs</span>
+                                    {ctxPct !== null && (
+                                      <span className={`text-xs shrink-0 tabular-nums ${ctxPct >= 75 ? "text-orange-500" : "text-zinc-600"}`}>{ctxPct}% ctx</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openSendModal(s); }}
+                                      title="Send message to this session"
+                                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 whitespace-nowrap flex items-center gap-1"
+                                    >
+                                      {monitorActiveSessions.has(s.id) && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                                      )}
+                                      Send →
+                                    </button>
+                                    <button
+                                      onClick={() => markSession(s, !unread)}
+                                      title={unread ? "Mark read" : "Mark unread"}
+                                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 whitespace-nowrap"
+                                    >
+                                      {unread ? "Mark read" : "Mark unread"}
+                                    </button>
+                                    <button
+                                      onClick={() => toggleTail(sessionKey, s.projectSlug, s.id)}
+                                      title="Preview tail"
+                                      className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors"
+                                    >
+                                      <svg
+                                        className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path d="M6 4l8 6-8 6V4z" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  onClick={() => toggleTail(sessionKey, s.projectSlug, s.id)}
-                                  title="Preview tail"
-                                  className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors"
-                                >
-                                  <svg
-                                    className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path d="M6 4l8 6-8 6V4z" />
-                                  </svg>
-                                </button>
                               </div>
                             </div>
                             {ctxPct !== null && (
