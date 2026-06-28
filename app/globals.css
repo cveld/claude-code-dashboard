@@ -13,8 +13,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
+
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {

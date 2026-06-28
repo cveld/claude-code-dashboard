@@ -113,9 +113,9 @@ export default function Home() {
   const displayedProjects = sortAsc ? [...visibleProjects].reverse() : visibleProjects;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden w-full">
+    <div className="w-full">
       {/* Sticky header */}
-      <div className="shrink-0 bg-zinc-950 border-b border-zinc-800">
+      <div className="sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
           <DashboardNav
             projects={projects}
@@ -143,8 +143,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Content */}
+      <div>
       <div className="max-w-5xl w-full mx-auto px-4 py-4">
       <section>
         {loading ? (

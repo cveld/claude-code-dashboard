@@ -6,8 +6,9 @@
 |---|---|
 | `docs/architecture.md` | Routes, API routes, data types, SSE, hook-events, IDE-windows |
 | `docs/screens.md` | Per-screen overview of elements and behavior |
-| `docs/gotchas.md` | Known pitfalls (Tailwind 4, flex layout, scrollbars) |
+| `docs/gotchas.md` | Known pitfalls (Tailwind 4, flex layout, mobile scroll/sticky, overflow-x: clip) |
 | `docs/testing.md` | Playwright e2e, screenshot script, test-results folder |
+| `docs/gallery.md` | Dev-only gallery & ResponsiveViewer: CLIP_PRESETS, ChromeBar, toggles, ScreenDimensions |
 | `docs/sessions/sessions-planned-index.md` | Open plans for upcoming sessions |
 
 # Workspace Dashboard App

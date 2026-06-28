@@ -294,12 +294,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8">
-      <DashboardNav
-        projects={projects}
-        selectedSlugs={[]}
-        onSelectedChange={() => {}}
-      />
+    <div className="w-full">
+      <div className="sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
+          <DashboardNav
+            projects={projects}
+            selectedSlugs={[]}
+            onSelectedChange={() => {}}
+          />
+        </div>
+      </div>
+      <div className="max-w-5xl w-full mx-auto px-4 py-8">
       <h1 className="text-xl font-semibold text-white mb-6">Settings</h1>
 
       {settings === null ? (
@@ -418,6 +423,7 @@ export default function SettingsPage() {
       {activeBlock && (
         <SnippetModal block={activeBlock} onClose={() => setActiveBlock(null)} />
       )}
+      </div>
     </div>
   );
 }
