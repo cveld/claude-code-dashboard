@@ -9,7 +9,8 @@
 | `/settings` | `app/settings/page.tsx` | Toggle-instellingen (`autoMarkAsRead`) |
 | `/projects/[slug]` | `app/projects/[slug]/page.tsx` | Sessies van één project, met per-sessie Mark read/unread knop |
 | `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript (rendert `TranscriptPanel`) |
-| `/gallery` | `app/gallery/page.tsx` | Dev-only component gallery — fixture tiles voor visuele validatie. Retourneert 404 in production (`NODE_ENV === "production"`). Geen API-calls, geen state. |
+| `/gallery` | `app/gallery/page.tsx` | Dev-only — wikkelt alleen `ResponsiveViewer`. Retourneert 404 in production. |
+| `/gallery/components` | `app/gallery/components/page.tsx` | Dev-only — standalone fixture-pagina (status indicators + session tiles). Geen nav, geschikt als iframe-target in de viewer. Retourneert 404 in production. |
 
 Schermen + opties per route staan in `screens.md`.
 
@@ -23,6 +24,7 @@ Navigatie via `DashboardNav` met `Link` + `usePathname` — geen `viewMode` stat
 | `app/lib/useDataRefresh.ts` | Hook: SSE-verbinding + debounce → `onRefresh` callback |
 | `app/components/DashboardNav.tsx` | Tab-balk + project-filter pills. Props: `projects`, `unreadCount?`, `projectFilter`, `onFilterChange` |
 | `app/components/TokenUsageBadge.tsx` | Compact token-usage badge rechts in de nav. Pollt `/api/token-usage` slim (op reset-moment). Toont alleen niet-null windows. |
+| `app/components/ScreenDimensions.tsx` | Dev-only: fixed overlay top-right met `window.innerWidth × window.innerHeight`. Gerenderd in root layout alleen als `NODE_ENV === 'development'`. |
 
 Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 
