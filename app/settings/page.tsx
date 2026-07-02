@@ -8,6 +8,27 @@ interface Settings {
   autoMarkAsRead: boolean;
 }
 
+interface ConfiguredHook {
+  event: string;
+  matcher?: string;
+  type: string;
+  shell?: string;
+  command: string;
+}
+
+interface ConfiguredHooksResponse {
+  source: string;
+  hooks: ConfiguredHook[];
+  error: string | null;
+}
+
+// Markers that identify a hook as part of the dashboard integration.
+const DASHBOARD_HOOK_MARKERS = ["/api/hooks", "session-start-hook.ps1", "monitor-start.sh"];
+
+function isDashboardHook(command: string) {
+  return DASHBOARD_HOOK_MARKERS.some((m) => command.includes(m));
+}
+
 // ── Hook command strings ──────────────────────────────────────────────────────
 
 const STOP_CMD =
@@ -122,6 +143,7 @@ type SnippetBlock = { label: string; content: string };
 
 interface HookDef {
   event: string;
+  eventKey: string; // key in settings.json → hooks, used to detect configured state
   description: string;
   blocks: SnippetBlock[];
 }
@@ -129,24 +151,28 @@ interface HookDef {
 const HOOK_DEFS: HookDef[] = [
   {
     event: "Stop",
+    eventKey: "Stop",
     description:
       "Claude Code finished a task — desktop notification with session title + live dashboard refresh.",
     blocks: [{ label: "Add to ~/.claude/settings.json → hooks:", content: hookSnippet("Stop", STOP_CMD) }],
   },
   {
     event: "Notification",
+    eventKey: "Notification",
     description:
       "Claude Code needs attention — desktop notification with message + dashboard update.",
     blocks: [{ label: "Add to ~/.claude/settings.json → hooks:", content: hookSnippet("Notification", NOTIFICATION_CMD) }],
   },
   {
     event: "PermissionRequest",
+    eventKey: "PermissionRequest",
     description:
       "Claude Code requires permission for a tool — desktop notification with tool name.",
     blocks: [{ label: "Add to ~/.claude/settings.json → hooks:", content: hookSnippet("PermissionRequest", PERMISSION_REQUEST_CMD) }],
   },
   {
     event: "SessionStart — inbox monitor",
+    eventKey: "SessionStart",
     description:
       "New session → injects additionalContext so Claude runs the inbox monitor automatically before its first response. The dashboard shows a green dot while the monitor heartbeat is fresh; stale files from reboots are cleaned up automatically. Hook script is in the repo at scripts/hooks/session-start-hook.ps1 — adjust the path in the hook command if needed.",
     blocks: [
@@ -220,13 +246,68 @@ function SnippetModal({
   );
 }
 
+// ── Configured hook card ──────────────────────────────────────────────────────
+
+function ConfiguredHookCard({
+  hook,
+  onShowBlock,
+}: {
+  hook: ConfiguredHook;
+  onShowBlock: (block: SnippetBlock) => void;
+}) {
+  const preview = hook.command.length > 110 ? hook.command.slice(0, 110) + "…" : hook.command;
+
+  return (
+    <div className="bg-zinc-900 rounded-xl px-5 py-4 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-zinc-200">{hook.event}</span>
+          {hook.matcher && (
+            <span className="text-[10px] font-mono text-zinc-400 border border-zinc-700/60 rounded px-1.5 py-0.5">
+              {hook.matcher}
+            </span>
+          )}
+          {hook.shell && (
+            <span className="text-[10px] text-zinc-400 border border-zinc-700/60 rounded px-1.5 py-0.5">
+              {hook.shell}
+            </span>
+          )}
+          {isDashboardHook(hook.command) && (
+            <span className="text-[10px] text-green-400 border border-green-700/60 rounded px-1.5 py-0.5">
+              dashboard
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-zinc-500 font-mono mt-1.5 leading-relaxed break-all">
+          {preview}
+        </div>
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <button
+          onClick={() =>
+            onShowBlock({
+              label: `${hook.event} — ~/.claude/settings.json`,
+              content: hook.command,
+            })
+          }
+          className="text-xs text-blue-400 hover:text-blue-300 border border-zinc-700/60 hover:border-zinc-600 rounded px-3 py-1.5 transition-colors whitespace-nowrap"
+        >
+          View command
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Hook card ─────────────────────────────────────────────────────────────────
 
 function HookCard({
   hook,
+  configured,
   onShowBlock,
 }: {
   hook: HookDef;
+  configured: boolean;
   onShowBlock: (block: SnippetBlock) => void;
 }) {
   const buttonLabel = (blocks: SnippetBlock[], i: number) => {
@@ -237,7 +318,18 @@ function HookCard({
   return (
     <div className="bg-zinc-900 rounded-xl px-5 py-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-zinc-200">{hook.event}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-zinc-200">{hook.event}</span>
+          {configured ? (
+            <span className="text-[10px] text-green-400 border border-green-700/60 rounded px-1.5 py-0.5">
+              ✓ configured
+            </span>
+          ) : (
+            <span className="text-[10px] text-zinc-500 border border-zinc-700/60 rounded px-1.5 py-0.5">
+              not configured
+            </span>
+          )}
+        </div>
         <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{hook.description}</div>
       </div>
       <div className="flex gap-2 shrink-0 pt-0.5">
@@ -265,18 +357,23 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [showHooks, setShowHooks] = useState(false);
   const [activeBlock, setActiveBlock] = useState<SnippetBlock | null>(null);
+  const [configuredHooks, setConfiguredHooks] = useState<ConfiguredHooksResponse | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/projects").then((r) => r.json()),
       fetch("/api/version").then((r) => r.json()),
-    ]).then(([s, p, v]) => {
+      fetch("/api/claude-settings/hooks").then((r) => r.json()),
+    ]).then(([s, p, v, ch]) => {
       setSettings(s);
       setProjects(p);
       setVersion(v.version ?? null);
+      setConfiguredHooks(ch);
     });
   }, []);
+
+  const configuredEvents = new Set((configuredHooks?.hooks ?? []).map((h) => h.event));
 
   async function toggle(key: keyof Settings) {
     if (!settings) return;
@@ -342,6 +439,31 @@ export default function SettingsPage() {
         </p>
       )}
 
+      {/* ── Configured hooks ───────────────────────────────────────────── */}
+      <h2 className="text-base font-semibold text-white mt-10 mb-4">Configured hooks</h2>
+      {configuredHooks === null ? (
+        <p className="text-zinc-500 text-sm">Loading…</p>
+      ) : configuredHooks.error ? (
+        <p className="text-sm text-amber-400/80 max-w-2xl">{configuredHooks.error}</p>
+      ) : configuredHooks.hooks.length === 0 ? (
+        <p className="text-sm text-zinc-500 max-w-2xl">
+          No hooks configured in{" "}
+          <span className="font-mono text-zinc-400">{configuredHooks.source}</span>.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-zinc-400 mb-4 max-w-2xl">
+            Hooks currently configured in{" "}
+            <span className="font-mono text-zinc-300">{configuredHooks.source}</span> (read-only).
+          </p>
+          <div className="max-w-2xl space-y-3">
+            {configuredHooks.hooks.map((h, i) => (
+              <ConfiguredHookCard key={i} hook={h} onShowBlock={setActiveBlock} />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* ── Setting up hooks ───────────────────────────────────────────── */}
       <div className="flex items-center justify-between mt-10 mb-4">
         <h2 className="text-base font-semibold text-white">Setting up hooks</h2>
@@ -362,7 +484,12 @@ export default function SettingsPage() {
           </p>
           <div className="max-w-2xl space-y-3">
             {HOOK_DEFS.map((h) => (
-              <HookCard key={h.event} hook={h} onShowBlock={setActiveBlock} />
+              <HookCard
+                key={h.event}
+                hook={h}
+                configured={configuredEvents.has(h.eventKey)}
+                onShowBlock={setActiveBlock}
+              />
             ))}
           </div>
         </>

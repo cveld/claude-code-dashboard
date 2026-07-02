@@ -39,6 +39,7 @@ Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 | `/api/projects/[slug]/sessions/[id]/stats` | GET | Token/context-stats voor `StatsBar` (`currentContext`, `totalOutputTokens`, cache, `assistantTurns`, `contextWindowSize`) |
 | `/api/read-state` | GET/POST | Leest/schrijft `.claude/dashboard-read.json`. POST: `{ slug }` of `{ slugs: string[], unread?: boolean }` voor bulk. `unread: true` verwijdert de key. |
 | `/api/settings` | GET/POST | Leest/schrijft `~/.claude/dashboard-settings.json`. Bevat `autoMarkAsRead`. |
+| `/api/claude-settings/hooks` | GET | Read-only: parseert `hooks` uit `~/.claude/settings.json` → platte lijst `{ event, matcher?, type, shell?, command }[]`. Getoond op `/settings` als "Configured hooks" sectie met dashboard-badge (command bevat `/api/hooks`, `session-start-hook.ps1` of `monitor-start.sh`) en ✓ configured badges op de setup-snippets. |
 | `/api/active-sessions` | GET | Live sessies uit `~/.claude/sessions/*.json` (pid, sessionId, cwd, startedAt, …) |
 | `/api/ide-windows` | GET | Draaiende IDE-vensters uit `~/.claude/ide/*.lock` (alleen levend PID). authToken weggelaten. |
 | `/api/ide-windows/open-file` | POST | `{ port, filePath }` → opent file via MCP-`openFile` over WS + brengt venster naar voorgrond (Windows). |
