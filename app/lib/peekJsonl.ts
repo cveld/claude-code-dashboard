@@ -9,6 +9,19 @@ export type PeekResult = {
   title: string | null;
   lastInputTokens: number | null;
   lastMessageAt: string | null;
+  // Total tokens billed across the whole session: sum over every assistant turn
+  // of input + cache-creation + cache-read + output. Unlike lastInputTokens
+  // (which reflects only the final turn's context), this accumulates every turn.
+  totalTokensBurned: number;
+  // Per-component breakdown of totalTokensBurned, summed over every turn.
+  tokenBreakdown: TokenBreakdown;
+};
+
+export type TokenBreakdown = {
+  input: number;
+  cacheCreation: number;
+  cacheRead: number;
+  output: number;
 };
 
 type CacheEntry = PeekResult & { mtime: string };
@@ -42,6 +55,10 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
     let customTitle: string | null = null;
     let lastInputTokens: number | null = null;
     let lastMessageAt: string | null = null;
+    let burnedInput = 0;
+    let burnedCacheCreation = 0;
+    let burnedCacheRead = 0;
+    let burnedOutput = 0;
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -67,6 +84,10 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
               + (u.cache_creation_input_tokens ?? 0)
               + (u.cache_read_input_tokens ?? 0);
           }
+          burnedInput += u.input_tokens ?? 0;
+          burnedCacheCreation += u.cache_creation_input_tokens ?? 0;
+          burnedCacheRead += u.cache_read_input_tokens ?? 0;
+          burnedOutput += u.output_tokens ?? 0;
         }
         if ((obj.type === "user" || obj.type === "assistant") && obj.timestamp) {
           lastMessageAt = obj.timestamp;
@@ -76,7 +97,21 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
       }
     });
 
-    rl.on("close", () => resolve({ startedAt, messageCount: count, firstUserMessage, title: customTitle ?? aiTitle, lastInputTokens, lastMessageAt }));
+    rl.on("close", () => resolve({
+      startedAt,
+      messageCount: count,
+      firstUserMessage,
+      title: customTitle ?? aiTitle,
+      lastInputTokens,
+      lastMessageAt,
+      totalTokensBurned: burnedInput + burnedCacheCreation + burnedCacheRead + burnedOutput,
+      tokenBreakdown: {
+        input: burnedInput,
+        cacheCreation: burnedCacheCreation,
+        cacheRead: burnedCacheRead,
+        output: burnedOutput,
+      },
+    }));
   });
 }
 
@@ -88,7 +123,9 @@ export async function peekJsonlCached(
 ): Promise<PeekResult> {
   const mtimeStr = mtime.toISOString();
   const entry = cache[filename];
-  if (entry && entry.mtime === mtimeStr) {
+  // Recompute when the field is missing so cache entries written before
+  // totalTokensBurned existed get backfilled on next read.
+  if (entry && entry.mtime === mtimeStr && entry.tokenBreakdown != null) {
     const { mtime: _m, ...result } = entry;
     return result;
   }

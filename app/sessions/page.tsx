@@ -15,6 +15,7 @@ import {
   HookEvent,
   isUnread,
   timeAgo,
+  type TokenBreakdown,
 } from "../lib/dashboard";
 import { useDataRefresh, type ChangeEvent } from "../lib/useDataRefresh";
 import { buildMonitorToolCall } from "../lib/monitorToolCall";
@@ -26,6 +27,22 @@ function contextBarColor(pct: number): string {
   if (pct >= 75) return "bg-orange-500";
   if (pct >= 50) return "bg-amber-500";
   return "bg-blue-500";
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+function burnedTitle(b: TokenBreakdown): string {
+  return [
+    "Total tokens billed across all turns:",
+    `  Input (fresh):  ${b.input.toLocaleString()}`,
+    `  Cache write:    ${b.cacheCreation.toLocaleString()}`,
+    `  Cache read:     ${b.cacheRead.toLocaleString()}`,
+    `  Output:         ${b.output.toLocaleString()}`,
+  ].join("\n");
 }
 
 interface TailMessage {
@@ -802,6 +819,9 @@ function SessionsPageInner() {
                                     <span className="text-xs text-zinc-600 shrink-0">{s.messageCount} msgs</span>
                                     {ctxPct !== null && (
                                       <span className={`text-xs shrink-0 tabular-nums ${ctxPct >= 75 ? "text-orange-500" : "text-zinc-600"}`}>{ctxPct}% ctx</span>
+                                    )}
+                                    {s.totalTokensBurned > 0 && (
+                                      <span className="text-xs text-zinc-600 shrink-0 tabular-nums" title={burnedTitle(s.tokenBreakdown)}>{fmtTokens(s.totalTokensBurned)} burned</span>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">

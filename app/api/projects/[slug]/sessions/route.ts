@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { loadCache, saveCache, peekJsonlCached } from "@/app/lib/peekJsonl";
+import { loadCache, saveCache, peekJsonlCached, type TokenBreakdown } from "@/app/lib/peekJsonl";
 
 export interface SessionInfo {
   id: string;
@@ -12,6 +12,8 @@ export interface SessionInfo {
   firstUserMessage: string | null;
   lastActivity: string;
   lastInputTokens: number | null;
+  totalTokensBurned: number;
+  tokenBreakdown: TokenBreakdown;
 }
 
 export async function GET(
@@ -32,7 +34,7 @@ export async function GET(
     files.map(async (f) => {
       const filePath = path.join(projectDir, f);
       const stat = fs.statSync(filePath);
-      const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt } = await peekJsonlCached(filePath, f, stat.mtime, cache);
+      const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt, totalTokensBurned, tokenBreakdown } = await peekJsonlCached(filePath, f, stat.mtime, cache);
       return {
         id: f.replace(".jsonl", ""),
         title,
@@ -41,6 +43,8 @@ export async function GET(
         firstUserMessage,
         lastActivity: lastMessageAt ?? stat.mtime.toISOString(),
         lastInputTokens: lastInputTokens ?? null,
+        totalTokensBurned: totalTokensBurned ?? 0,
+        tokenBreakdown,
       } as SessionInfo;
     })
   );

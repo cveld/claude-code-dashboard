@@ -38,11 +38,23 @@ interface TranscriptMessage {
 
 interface SessionStats {
   currentContext: number;
+  totalInputTokens: number;
   totalOutputTokens: number;
   totalCacheCreation: number;
   totalCacheRead: number;
+  totalTokensBurned: number;
   assistantTurns: number;
   contextWindowSize: number;
+}
+
+function burnedTitle(stats: SessionStats): string {
+  return [
+    "Total tokens billed across all turns:",
+    `  Input (fresh):  ${stats.totalInputTokens.toLocaleString()}`,
+    `  Cache write:    ${stats.totalCacheCreation.toLocaleString()}`,
+    `  Cache read:     ${stats.totalCacheRead.toLocaleString()}`,
+    `  Output:         ${stats.totalOutputTokens.toLocaleString()}`,
+  ].join("\n");
 }
 
 function fmtTokens(n: number): string {
@@ -77,6 +89,9 @@ function StatsBar({ stats }: { stats: SessionStats }) {
       </div>
       <span className="text-xs text-zinc-500 shrink-0">
         Out <span className="text-zinc-300 tabular-nums">{fmtTokens(stats.totalOutputTokens)}</span>
+      </span>
+      <span className="text-xs text-zinc-500 shrink-0" title={burnedTitle(stats)}>
+        Burned <span className="text-zinc-300 tabular-nums">{fmtTokens(stats.totalTokensBurned)}</span>
       </span>
       {cacheHitPct !== null && (
         <span className="text-xs text-zinc-500 shrink-0">

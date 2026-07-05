@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { loadCache, saveCache, peekJsonlCached } from "@/app/lib/peekJsonl";
+import { loadCache, saveCache, peekJsonlCached, type TokenBreakdown } from "@/app/lib/peekJsonl";
 import { resolveCwd } from "@/app/lib/resolveCwd";
 
 export interface SessionWithProject {
@@ -15,6 +15,8 @@ export interface SessionWithProject {
   projectSlug: string;
   projectDisplayPath: string;
   lastInputTokens: number | null;
+  totalTokensBurned: number;
+  tokenBreakdown: TokenBreakdown;
 }
 
 export async function GET(req: Request) {
@@ -62,7 +64,7 @@ export async function GET(req: Request) {
       const sessions = await Promise.all(
         candidates.map(async ({ file, mtime }) => {
           const filePath = path.join(projectDir, file);
-          const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt } = await peekJsonlCached(filePath, file, mtime, cache);
+          const { startedAt, messageCount, firstUserMessage, title, lastInputTokens, lastMessageAt, totalTokensBurned, tokenBreakdown } = await peekJsonlCached(filePath, file, mtime, cache);
           return {
             id: file.replace(".jsonl", ""),
             title,
@@ -73,6 +75,8 @@ export async function GET(req: Request) {
             projectSlug: slug,
             projectDisplayPath: displayPath,
             lastInputTokens: lastInputTokens ?? null,
+            totalTokensBurned: totalTokensBurned ?? 0,
+            tokenBreakdown,
           } as SessionWithProject;
         })
       );

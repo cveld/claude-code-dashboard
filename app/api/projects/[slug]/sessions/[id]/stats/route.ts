@@ -6,9 +6,13 @@ import readline from "readline";
 
 export interface SessionStats {
   currentContext: number;
+  // Fresh (non-cached) input tokens summed over every assistant turn.
+  totalInputTokens: number;
   totalOutputTokens: number;
   totalCacheCreation: number;
   totalCacheRead: number;
+  // Total tokens billed across every assistant turn: input + cache + output.
+  totalTokensBurned: number;
   assistantTurns: number;
   contextWindowSize: number;
 }
@@ -17,9 +21,11 @@ async function parseStats(filePath: string): Promise<SessionStats> {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: fs.createReadStream(filePath), crlfDelay: Infinity });
     let currentContext = 0;
+    let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCacheCreation = 0;
     let totalCacheRead = 0;
+    let totalTokensBurned = 0;
     let assistantTurns = 0;
 
     rl.on("line", (line) => {
@@ -29,9 +35,14 @@ async function parseStats(filePath: string): Promise<SessionStats> {
         if (obj.type === "assistant" && obj.message?.usage) {
           const u = obj.message.usage;
           if (u.input_tokens != null) currentContext = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+          totalInputTokens += u.input_tokens ?? 0;
           totalOutputTokens += u.output_tokens ?? 0;
           totalCacheCreation += u.cache_creation_input_tokens ?? 0;
           totalCacheRead += u.cache_read_input_tokens ?? 0;
+          totalTokensBurned += (u.input_tokens ?? 0)
+            + (u.cache_creation_input_tokens ?? 0)
+            + (u.cache_read_input_tokens ?? 0)
+            + (u.output_tokens ?? 0);
           assistantTurns++;
         }
       } catch {
@@ -42,9 +53,11 @@ async function parseStats(filePath: string): Promise<SessionStats> {
     rl.on("close", () =>
       resolve({
         currentContext,
+        totalInputTokens,
         totalOutputTokens,
         totalCacheCreation,
         totalCacheRead,
+        totalTokensBurned,
         assistantTurns,
         contextWindowSize: 200000,
       })

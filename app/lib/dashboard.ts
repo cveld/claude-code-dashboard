@@ -24,6 +24,17 @@ export interface SessionWithProject {
   projectSlug: string;
   projectDisplayPath: string;
   lastInputTokens: number | null;
+  totalTokensBurned: number;
+  tokenBreakdown: TokenBreakdown;
+}
+
+// Kept structurally identical to TokenBreakdown in peekJsonl.ts; duplicated here
+// so this client-safe module never imports the fs-backed parser.
+export interface TokenBreakdown {
+  input: number;
+  cacheCreation: number;
+  cacheRead: number;
+  output: number;
 }
 
 export function isUnread(
