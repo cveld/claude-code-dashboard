@@ -117,28 +117,33 @@ export default function Home() {
       {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
-          <DashboardNav
-            projects={projects}
-            unreadCounts={unreadCountsPerProject}
-            selectedSlugs={selectedSlugs}
-            onSelectedChange={setSelectedSlugs}
-            refreshCount={refreshCount}
-          />
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Projects
-              {visibleProjects.length !== projects.length && (
-                <span className="ml-2 normal-case font-normal text-zinc-600">
-                  {visibleProjects.length} of {projects.length}
-                </span>
-              )}
-            </h2>
-            <button
-              onClick={() => setSortAsc((a) => !a)}
-              className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
-            >
-              {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
-            </button>
+          {/* Mobile: single row (hamburger + controls). Desktop: two rows (nav + controls). */}
+          <div className="flex items-center gap-2 md:block">
+            <DashboardNav
+              projects={projects}
+              unreadCounts={unreadCountsPerProject}
+              selectedSlugs={selectedSlugs}
+              onSelectedChange={setSelectedSlugs}
+              refreshCount={refreshCount}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between w-full">
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                  Projects
+                  {visibleProjects.length !== projects.length && (
+                    <span className="ml-2 normal-case font-normal text-zinc-600">
+                      {visibleProjects.length} of {projects.length}
+                    </span>
+                  )}
+                </h2>
+                <button
+                  onClick={() => setSortAsc((a) => !a)}
+                  className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+                >
+                  {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
