@@ -19,11 +19,12 @@ export async function POST(req: NextRequest) {
   }
 
   const event: HookEvent = {
-    type: body.event as "stop" | "notification",
+    type: body.event as "stop" | "notification" | "permission",
     sessionId,
     projectSlug,
     message: body.message,
     title: body.title,
+    tool: body.tool,
     timestamp: new Date().toISOString(),
   };
 

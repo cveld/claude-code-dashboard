@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HookEvent, type TokenBreakdown } from "@/app/lib/dashboard";
-import { useDataRefresh } from "@/app/lib/useDataRefresh";
+import { useDataRefresh, type ChangeEvent } from "@/app/lib/useDataRefresh";
 
 interface SessionInfo {
   id: string;
@@ -69,11 +69,30 @@ function IconBell() {
   );
 }
 
-function HookBadge({ type }: { type: "stop" | "notification" }) {
+function IconQuestion() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.7 2.6a1.3 1.3 0 1 1 2.05 1.06c-.4.3-.75.6-.75 1.14v.2" />
+      <circle cx="4" cy="6.6" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function HookBadge({ type, tool }: { type: "stop" | "notification" | "permission"; tool?: string }) {
   if (type === "stop") {
     return (
       <span className="w-4 h-4 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center shrink-0">
         <IconCheck />
+      </span>
+    );
+  }
+  if (type === "permission") {
+    return (
+      <span
+        title={tool ? `Permission needed: ${tool}` : "Permission needed"}
+        className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 animate-pulse"
+      >
+        <IconQuestion />
       </span>
     );
   }
@@ -111,13 +130,27 @@ export default function ProjectPage() {
     return () => clearTimeout(t);
   }, [loading, flashId]);
 
-  const loadData = useCallback(() => {
-    Promise.all([
+  const loadData = useCallback((change?: ChangeEvent) => {
+    const isInitial = change === undefined;
+    const promises: Promise<unknown>[] = [
       fetch(`/api/projects/${slug}/sessions`).then((r) => r.json()),
       fetch("/api/read-state").then((r) => r.json()),
-    ]).then(([data, rs]) => {
+    ];
+    if (isInitial) promises.push(fetch("/api/hook-events").then((r) => r.json()));
+
+    Promise.all(promises).then((results) => {
+      const [data, rs] = results as [SessionInfo[], Record<string, string>];
       setSessions(data);
       setReadState(rs);
+      if (isInitial) {
+        const hooks = results[2] as Record<string, HookEvent>;
+        const projectSlug = decodeURIComponent(slug);
+        const scoped: Record<string, HookEvent> = {};
+        for (const event of Object.values(hooks)) {
+          if (event.projectSlug === projectSlug) scoped[event.sessionId] = event;
+        }
+        setHookNotifs(scoped);
+      }
       setLoading(false);
     });
   }, [slug]);
@@ -146,6 +179,8 @@ export default function ProjectPage() {
       const body =
         event.type === "stop"
           ? `Klaar: ${event.title || event.projectSlug || "sessie"}`
+          : event.type === "permission"
+          ? `Toestemming vereist: ${event.tool || event.projectSlug || "tool"}`
           : event.message || "Aandacht nodig";
       new Notification("Claude Code", { body, silent: true });
     }
@@ -245,7 +280,11 @@ export default function ProjectPage() {
               key={s.id}
               id={s.id}
               className={`rounded-lg overflow-hidden transition-colors duration-1000 ${
-                s.id === flashId ? "bg-amber-900/50" : "bg-zinc-900"
+                s.id === flashId
+                  ? "bg-amber-900/50"
+                  : hookNotif?.type === "permission" && isUnread
+                  ? "bg-red-950/40 ring-1 ring-red-500/50"
+                  : "bg-zinc-900"
               }`}
             >
               <div className="flex items-stretch group hover:bg-zinc-800 transition-colors">
@@ -255,7 +294,7 @@ export default function ProjectPage() {
                 >
                   <div className="mt-1.5 shrink-0">
                     {hookNotif ? (
-                      <HookBadge type={hookNotif.type} />
+                      <HookBadge type={hookNotif.type} tool={hookNotif.tool} />
                     ) : isUnread ? (
                       <span className="w-2 h-2 rounded-full bg-blue-400 block" />
                     ) : (

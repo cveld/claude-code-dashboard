@@ -77,7 +77,7 @@ Twee secties met fixture-tiles (hardcoded data, geen fetch):
 
 | Sectie | Fixtures |
 |---|---|
-| Status indicators | Unread (blauw bolletje), Read, Unread + completed (groen vinkje), Read + completed (grijs vinkje), Notification (amber bell) |
+| Status indicators | Unread (blauw bolletje), Read, Unread + completed (groen vinkje), Read + completed (grijs vinkje), Notification (amber bell), Permission needed (rood vraagteken, gepulseerd + rode tile-highlight) |
 | Session tiles | Monitor active (groene dot op Send-knop), Context low 30% (blauwe balk), Context high 80% (oranje), Context critical 95% (rood), Long title (truncatie) |
 
 Elke tile toont dezelfde Tailwind-classes als de echte sessie-tile in `app/sessions/page.tsx` — knoppen zijn zichtbaar maar niet klikbaar (geen handlers).
@@ -109,7 +109,8 @@ Detectie van draaiende Claude-Code IDE-vensters via lock-files in `~/.claude/ide
 
 ## Hook-notificaties
 
-Claude-Code hooks POSTen naar `POST /api/hooks` (`{ event: "stop"|"notification", sessionId, transcriptPath, message, title }`). De route emit een `HookEvent` op de in-memory `hookEmitter`; `/api/events` (SSE) stuurt die door als `hook`-event.
+Claude-Code hooks POSTen naar `POST /api/hooks` (`{ event: "stop"|"notification"|"permission", sessionId, transcriptPath, message, title, tool }`). De route emit een `HookEvent` op de in-memory `hookEmitter`; `/api/events` (SSE) stuurt die door als `hook`-event.
 
 - `useDataRefresh(onRefresh, onHookEvent?)` levert hook-events aan de client.
-- In `/sessions` zet `handleHookEvent` een dot per sessie (groen = `stop`, amber = `notification`) en toont een browser-`Notification` (permission wordt bij load gevraagd).
+- In `/sessions` en `/projects/[slug]` zet `handleHookEvent` een badge per sessie (groen vinkje = `stop`, amber bel = `notification`, rood vraagteken = `permission`) en toont een browser-`Notification` (permission wordt bij load gevraagd).
+- **Permission needed** (`type: "permission"`, gevoed door de `PermissionRequest`-hook, snippet op `/settings`): naast de rode vraagteken-badge (gepulseerd) krijgt de hele sessie-tile een rode achtergrond + ring zolang de sessie ongelezen is — dit blijft staan totdat de sessie als gelezen wordt gemarkeerd (geen auto-dismiss timer, in tegenstelling tot de amber `bg-amber-900/50` flash bij session-highlight-via-URL).

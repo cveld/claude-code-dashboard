@@ -1,9 +1,10 @@
 export interface HookEvent {
-  type: "stop" | "notification";
+  type: "stop" | "notification" | "permission";
   sessionId: string;
   projectSlug: string;
   message?: string;
   title?: string;
+  tool?: string;
   timestamp: string;
 }
 

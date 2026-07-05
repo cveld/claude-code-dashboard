@@ -14,6 +14,7 @@ Specs staan in `e2e/`. Huidig:
 | Spec | Doel |
 |---|---|
 | `e2e/sessions-layout-toggle.spec.ts` | List/split layout toggle, persistentie, tail-expand zichtbaarheid |
+| `e2e/permission-highlight.spec.ts` | POST't een gesimuleerd `PermissionRequest`-hook-event (`event: "permission"`) naar `/api/hooks` voor de meest recente sessie en checkt de rode ring + "Permission needed"-badge op `/sessions`. Snapshot/restore van `~/.claude/dashboard-hook-events.json` in `beforeEach`/`afterEach` — dit bestand wordt ook door de echte dashboard-instance gebruikt. |
 
 ## Playwright output (`test-results/`)
 

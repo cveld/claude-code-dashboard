@@ -110,7 +110,16 @@ function IconBell() {
   );
 }
 
-function HookBadge({ type, read }: { type: "stop" | "notification"; read?: boolean }) {
+function IconQuestion() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.7 2.6a1.3 1.3 0 1 1 2.05 1.06c-.4.3-.75.6-.75 1.14v.2" />
+      <circle cx="4" cy="6.6" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function HookBadge({ type, read, tool }: { type: "stop" | "notification" | "permission"; read?: boolean; tool?: string }) {
   if (type === "stop") {
     return (
       <span
@@ -118,6 +127,16 @@ function HookBadge({ type, read }: { type: "stop" | "notification"; read?: boole
         className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${read ? "bg-zinc-500/20 text-zinc-500" : "bg-green-500/20 text-green-400"}`}
       >
         <IconCheck />
+      </span>
+    );
+  }
+  if (type === "permission") {
+    return (
+      <span
+        title={tool ? `Permission needed: ${tool}` : "Permission needed"}
+        className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5 animate-pulse"
+      >
+        <IconQuestion />
       </span>
     );
   }
@@ -339,6 +358,8 @@ function SessionsPageInner() {
       const body =
         event.type === "stop"
           ? `Klaar: ${event.title || event.projectSlug || "sessie"}`
+          : event.type === "permission"
+          ? `Toestemming vereist: ${event.tool || event.projectSlug || "tool"}`
           : event.message || "Aandacht nodig";
       new Notification("Claude Code", { body, silent: true });
     }
@@ -482,7 +503,7 @@ function SessionsPageInner() {
 
   // Controls bar — shared between list and split mode
   const controlsBar = (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between w-full">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Sessions
         {!loading && (
@@ -594,8 +615,26 @@ function SessionsPageInner() {
                         >
                           {splitHookNotif ? (
                             <span
-                              title={splitHookNotif.type === "stop" ? (unread ? "Completed (unread)" : "Completed (read)") : "Notification"}
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${splitHookNotif.type === "stop" ? (unread ? "bg-green-400" : "bg-zinc-500") : "bg-amber-400"}`}
+                              title={
+                                splitHookNotif.type === "stop"
+                                  ? unread
+                                    ? "Completed (unread)"
+                                    : "Completed (read)"
+                                  : splitHookNotif.type === "permission"
+                                  ? splitHookNotif.tool
+                                    ? `Permission needed: ${splitHookNotif.tool}`
+                                    : "Permission needed"
+                                  : "Notification"
+                              }
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
+                                splitHookNotif.type === "stop"
+                                  ? unread
+                                    ? "bg-green-400"
+                                    : "bg-zinc-500"
+                                  : splitHookNotif.type === "permission"
+                                  ? "bg-red-400 animate-pulse"
+                                  : "bg-amber-400"
+                              }`}
                             />
                           ) : unread ? (
                             <span title="Unread" className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0 mt-1.5" />
@@ -641,16 +680,19 @@ function SessionsPageInner() {
     return (
       <div className="flex flex-col h-screen overflow-hidden w-full">
         {/* Top bar — sticky */}
-        <div className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800 space-y-3">
-          <DashboardNav
-            projects={projects}
-            unreadCount={unreadCount}
-            unreadCounts={unreadCountsPerProject}
-            selectedSlugs={selectedSlugs}
-            onSelectedChange={setSelectedSlugs}
-            refreshCount={refreshCount}
-          />
-          {controlsBar}
+        <div className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800">
+          {/* Mobile: single row (hamburger + controls). Desktop: two rows (nav + controls). */}
+          <div className="flex items-center gap-2 md:block md:space-y-3">
+            <DashboardNav
+              projects={projects}
+              unreadCount={unreadCount}
+              unreadCounts={unreadCountsPerProject}
+              selectedSlugs={selectedSlugs}
+              onSelectedChange={setSelectedSlugs}
+              refreshCount={refreshCount}
+            />
+            <div className="flex-1 min-w-0">{controlsBar}</div>
+          </div>
         </div>
 
         {/* Split pane */}
@@ -691,15 +733,18 @@ function SessionsPageInner() {
       {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-2">
-          <DashboardNav
-            projects={projects}
-            unreadCount={unreadCount}
-            unreadCounts={unreadCountsPerProject}
-            selectedSlugs={selectedSlugs}
-            onSelectedChange={setSelectedSlugs}
-            refreshCount={refreshCount}
-          />
-          {controlsBar}
+          {/* Mobile: single row (hamburger + controls). Desktop: two rows (nav + controls). */}
+          <div className="flex items-center gap-2 md:block">
+            <DashboardNav
+              projects={projects}
+              unreadCount={unreadCount}
+              unreadCounts={unreadCountsPerProject}
+              selectedSlugs={selectedSlugs}
+              onSelectedChange={setSelectedSlugs}
+              refreshCount={refreshCount}
+            />
+            <div className="flex-1 min-w-0">{controlsBar}</div>
+          </div>
         </div>
       </div>
 
@@ -776,11 +821,15 @@ function SessionsPageInner() {
                               if (el) itemRefs.current.set(sessionKey, el);
                               else itemRefs.current.delete(sessionKey);
                             }}
-                            className="rounded-lg bg-zinc-900 overflow-hidden"
+                            className={`rounded-lg overflow-hidden ${
+                              hookNotif?.type === "permission" && unread
+                                ? "bg-red-950/40 ring-1 ring-red-500/50"
+                                : "bg-zinc-900"
+                            }`}
                           >
                             <div className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors group">
                               {hookNotif ? (
-                                <HookBadge type={hookNotif.type} read={!unread} />
+                                <HookBadge type={hookNotif.type} read={!unread} tool={hookNotif.tool} />
                               ) : unread ? (
                                 <span title="Unread" className="w-2 h-2 rounded-full bg-blue-400 shrink-0 mt-1" />
                               ) : (

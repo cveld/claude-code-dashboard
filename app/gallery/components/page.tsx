@@ -18,11 +18,27 @@ function IconBell() {
   );
 }
 
-function HookBadge({ type, read }: { type: "stop" | "notification"; read?: boolean }) {
+function IconQuestion() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.7 2.6a1.3 1.3 0 1 1 2.05 1.06c-.4.3-.75.6-.75 1.14v.2" />
+      <circle cx="4" cy="6.6" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function HookBadge({ type, read }: { type: "stop" | "notification" | "permission"; read?: boolean }) {
   if (type === "stop") {
     return (
       <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${read ? "bg-zinc-500/20 text-zinc-500" : "bg-green-500/20 text-green-400"}`}>
         <IconCheck />
+      </span>
+    );
+  }
+  if (type === "permission") {
+    return (
+      <span className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5 animate-pulse">
+        <IconQuestion />
       </span>
     );
   }
@@ -45,7 +61,7 @@ interface TileFixture {
   title: string;
   path: string;
   unread: boolean;
-  hook: "stop" | "notification" | null;
+  hook: "stop" | "notification" | "permission" | null;
   ctxPct: number | null;
   monitorActive: boolean;
 }
@@ -56,6 +72,7 @@ const STATUS_FIXTURES: TileFixture[] = [
   { label: "Unread + completed", title: "Refactor database layer", path: "c:/work/project", unread: true, hook: "stop", ctxPct: null, monitorActive: false },
   { label: "Read + completed", title: "Update dependencies to latest", path: "c:/work/project", unread: false, hook: "stop", ctxPct: null, monitorActive: false },
   { label: "Notification", title: "Deploy to production", path: "c:/work/project", unread: false, hook: "notification", ctxPct: null, monitorActive: false },
+  { label: "Permission needed", title: "Run database migration script", path: "c:/work/project", unread: true, hook: "permission", ctxPct: null, monitorActive: false },
 ];
 
 const TILE_FIXTURES: TileFixture[] = [
@@ -71,7 +88,11 @@ function GalleryTile({ fixture }: { fixture: TileFixture }) {
   return (
     <div>
       <div className="text-xs text-zinc-500 mb-1 font-medium">{label}</div>
-      <div className="rounded-lg bg-zinc-900 overflow-hidden">
+      <div
+        className={`rounded-lg overflow-hidden ${
+          hook === "permission" && unread ? "bg-red-950/40 ring-1 ring-red-500/50" : "bg-zinc-900"
+        }`}
+      >
         <div className="flex items-start gap-4 px-4 py-3 group">
           {hook ? (
             <HookBadge type={hook} read={!unread} />

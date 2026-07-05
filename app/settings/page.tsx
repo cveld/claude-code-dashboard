@@ -50,7 +50,9 @@ const NOTIFICATION_CMD =
 const PERMISSION_REQUEST_CMD =
   `$d = [Console]::In.ReadToEnd() | ConvertFrom-Json; ` +
   `$tool = if ($d.tool_name) { $d.tool_name } else { '?' }; ` +
-  `New-BurntToastNotification -Text 'Claude Code', "Toestemming vereist: $tool"; exit 0`;
+  `New-BurntToastNotification -Text 'Claude Code', "Toestemming vereist: $tool"; ` +
+  `try { $body = [pscustomobject]@{event='permission'; transcriptPath=$d.transcript_path; sessionId=$d.session_id; cwd=$d.cwd; tool=$tool} | ConvertTo-Json -Compress; ` +
+  `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/api/hooks' -Body $body -ContentType 'application/json' -TimeoutSec 2 } catch {}; exit 0`;
 
 // Windows: calls session-start-hook.ps1 from the repo — outputs additionalContext
 // so Claude automatically runs the Monitor bash tool at session start.
@@ -167,7 +169,7 @@ const HOOK_DEFS: HookDef[] = [
     event: "PermissionRequest",
     eventKey: "PermissionRequest",
     description:
-      "Claude Code requires permission for a tool — desktop notification with tool name.",
+      "Claude Code requires permission for a tool — desktop notification with tool name, and highlights the session on the dashboard until acknowledged.",
     blocks: [{ label: "Add to ~/.claude/settings.json → hooks:", content: hookSnippet("PermissionRequest", PERMISSION_REQUEST_CMD) }],
   },
   {

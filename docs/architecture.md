@@ -201,7 +201,7 @@ setSessions(prev => {
 
 ## Hook-events
 
-Claude-Code hooks POSTen naar `/api/hooks`. De route bouwt een `HookEvent` (`type`, `sessionId`, `projectSlug`, `message?`, `title?`, `timestamp`) en doet `hookEmitter.emit("hook", event)`. De emitter is een globalThis-singleton (`app/lib/hookEvents.ts`) zodat hij hot-reload en route-isolatie overleeft. `/api/events` relayed het naar de browser; `/sessions` toont een dot (groen=stop, amber=notification) + browser-`Notification`. Zie `screens.md`.
+Claude-Code hooks POSTen naar `/api/hooks`. De route bouwt een `HookEvent` (`type: "stop"|"notification"|"permission"`, `sessionId`, `projectSlug`, `message?`, `title?`, `tool?`, `timestamp`) en doet `hookEmitter.emit("hook", event)`. De emitter is een globalThis-singleton (`app/lib/hookEvents.ts`) zodat hij hot-reload en route-isolatie overleeft. `/api/events` relayed het naar de browser; `/sessions` en `/projects/[slug]` tonen een badge (groen vinkje=stop, amber bel=notification, rood vraagteken=permission) + browser-`Notification`. De `permission`-badge pulseert en de sessie-tile krijgt een rode highlight (`bg-red-950/40 ring-1 ring-red-500/50`) zolang de sessie ongelezen is — gevoed door de `PermissionRequest`-hook (`tool_name` → `tool` veld). Zie `screens.md`.
 
 ## Send message to session
 
