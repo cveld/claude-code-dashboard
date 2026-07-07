@@ -17,11 +17,17 @@ export type PeekResult = {
   tokenBreakdown: TokenBreakdown;
 };
 
-export type TokenBreakdown = {
+export type TokenComponents = {
   input: number;
   cacheCreation: number;
   cacheRead: number;
   output: number;
+};
+
+export type TokenBreakdown = TokenComponents & {
+  // Same component totals, split by the model that billed each turn.
+  // Keyed by message.model (e.g. "claude-opus-4-8").
+  perModel: Record<string, TokenComponents>;
 };
 
 type CacheEntry = PeekResult & { mtime: string };
@@ -59,6 +65,7 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
     let burnedCacheCreation = 0;
     let burnedCacheRead = 0;
     let burnedOutput = 0;
+    const perModel: Record<string, TokenComponents> = {};
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -88,6 +95,12 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
           burnedCacheCreation += u.cache_creation_input_tokens ?? 0;
           burnedCacheRead += u.cache_read_input_tokens ?? 0;
           burnedOutput += u.output_tokens ?? 0;
+          const model = obj.message.model ?? "unknown";
+          const m = (perModel[model] ??= { input: 0, cacheCreation: 0, cacheRead: 0, output: 0 });
+          m.input += u.input_tokens ?? 0;
+          m.cacheCreation += u.cache_creation_input_tokens ?? 0;
+          m.cacheRead += u.cache_read_input_tokens ?? 0;
+          m.output += u.output_tokens ?? 0;
         }
         if ((obj.type === "user" || obj.type === "assistant") && obj.timestamp) {
           lastMessageAt = obj.timestamp;
@@ -110,6 +123,7 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
         cacheCreation: burnedCacheCreation,
         cacheRead: burnedCacheRead,
         output: burnedOutput,
+        perModel,
       },
     }));
   });
@@ -124,8 +138,8 @@ export async function peekJsonlCached(
   const mtimeStr = mtime.toISOString();
   const entry = cache[filename];
   // Recompute when the field is missing so cache entries written before
-  // totalTokensBurned existed get backfilled on next read.
-  if (entry && entry.mtime === mtimeStr && entry.tokenBreakdown != null) {
+  // the per-model breakdown existed get backfilled on next read.
+  if (entry && entry.mtime === mtimeStr && entry.tokenBreakdown?.perModel != null) {
     const { mtime: _m, ...result } = entry;
     return result;
   }

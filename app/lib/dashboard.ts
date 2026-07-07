@@ -31,11 +31,16 @@ export interface SessionWithProject {
 
 // Kept structurally identical to TokenBreakdown in peekJsonl.ts; duplicated here
 // so this client-safe module never imports the fs-backed parser.
-export interface TokenBreakdown {
+export interface TokenComponents {
   input: number;
   cacheCreation: number;
   cacheRead: number;
   output: number;
+}
+
+export interface TokenBreakdown extends TokenComponents {
+  // Same component totals, split by the model that billed each turn.
+  perModel: Record<string, TokenComponents>;
 }
 
 export function isUnread(

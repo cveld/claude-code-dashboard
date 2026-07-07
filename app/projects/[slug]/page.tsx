@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HookEvent, type TokenBreakdown } from "@/app/lib/dashboard";
 import { useDataRefresh, type ChangeEvent } from "@/app/lib/useDataRefresh";
+import { BurnedTokensTooltip } from "@/app/components/BurnedTokensTooltip";
 
 interface SessionInfo {
   id: string;
@@ -31,16 +32,6 @@ function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
-}
-
-function burnedTitle(b: TokenBreakdown): string {
-  return [
-    "Total tokens billed across all turns:",
-    `  Input (fresh):  ${b.input.toLocaleString()}`,
-    `  Cache write:    ${b.cacheCreation.toLocaleString()}`,
-    `  Cache read:     ${b.cacheRead.toLocaleString()}`,
-    `  Output:         ${b.output.toLocaleString()}`,
-  ].join("\n");
 }
 
 function timeAgo(iso: string): string {
@@ -328,7 +319,9 @@ export default function ProjectPage() {
                       <div className="text-xs text-zinc-600 mt-0.5">{ctxPct}% ctx</div>
                     )}
                     {s.totalTokensBurned > 0 && (
-                      <div className="text-xs text-zinc-600 mt-0.5 tabular-nums" title={burnedTitle(s.tokenBreakdown)}>{fmtTokens(s.totalTokensBurned)} burned</div>
+                      <BurnedTokensTooltip {...s.tokenBreakdown}>
+                        <div className="text-xs text-zinc-600 mt-0.5 tabular-nums">{fmtTokens(s.totalTokensBurned)} burned</div>
+                      </BurnedTokensTooltip>
                     )}
                   </div>
                 </div>

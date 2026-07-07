@@ -13,8 +13,17 @@ export interface SessionStats {
   totalCacheRead: number;
   // Total tokens billed across every assistant turn: input + cache + output.
   totalTokensBurned: number;
+  // Per-model split of the burned components, keyed by message.model.
+  perModel: Record<string, ModelTokenComponents>;
   assistantTurns: number;
   contextWindowSize: number;
+}
+
+export interface ModelTokenComponents {
+  input: number;
+  cacheCreation: number;
+  cacheRead: number;
+  output: number;
 }
 
 async function parseStats(filePath: string): Promise<SessionStats> {
@@ -27,6 +36,7 @@ async function parseStats(filePath: string): Promise<SessionStats> {
     let totalCacheRead = 0;
     let totalTokensBurned = 0;
     let assistantTurns = 0;
+    const perModel: Record<string, ModelTokenComponents> = {};
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -43,6 +53,12 @@ async function parseStats(filePath: string): Promise<SessionStats> {
             + (u.cache_creation_input_tokens ?? 0)
             + (u.cache_read_input_tokens ?? 0)
             + (u.output_tokens ?? 0);
+          const model = obj.message.model ?? "unknown";
+          const m = (perModel[model] ??= { input: 0, cacheCreation: 0, cacheRead: 0, output: 0 });
+          m.input += u.input_tokens ?? 0;
+          m.cacheCreation += u.cache_creation_input_tokens ?? 0;
+          m.cacheRead += u.cache_read_input_tokens ?? 0;
+          m.output += u.output_tokens ?? 0;
           assistantTurns++;
         }
       } catch {
@@ -58,6 +74,7 @@ async function parseStats(filePath: string): Promise<SessionStats> {
         totalCacheCreation,
         totalCacheRead,
         totalTokensBurned,
+        perModel,
         assistantTurns,
         contextWindowSize: 200000,
       })
