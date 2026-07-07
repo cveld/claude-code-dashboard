@@ -41,6 +41,43 @@ function componentsTotal(c: TokenComponents): number {
   return c.input + c.cacheCreation + c.cacheRead + c.output;
 }
 
+// $/MTok sticker pricing by model family (as of 2026-07). Cache write assumes
+// the default 5-minute ephemeral TTL (1.25x input); actual spend is lower if
+// a turn used 1h-TTL caching instead. Sonnet 5 has a temporary lower intro
+// rate through 2026-08-31 — we price at the standing rate so figures don't
+// silently drop once the intro period ends.
+type Price = { input: number; output: number; cacheWrite: number; cacheRead: number };
+const PRICING: Record<string, Price> = {
+  opus: { input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.5 },
+  sonnet: { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
+  haiku: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
+  fable: { input: 10, output: 50, cacheWrite: 12.5, cacheRead: 1 },
+  mythos: { input: 10, output: 50, cacheWrite: 12.5, cacheRead: 1 },
+};
+
+// Only matches "claude-<family>-<digit>..." — legacy models named
+// "claude-3-opus-..." or "claude-3-5-sonnet-..." intentionally fall through
+// to null rather than risk pricing them at the wrong (current-gen) tier.
+export function priceForModel(model: string): Price | null {
+  const m = model.match(/^claude-([a-z]+)-\d/i);
+  return m ? (PRICING[m[1].toLowerCase()] ?? null) : null;
+}
+
+export function estimateCost(c: TokenComponents, price: Price): number {
+  return (
+    (c.input / 1_000_000) * price.input +
+    (c.cacheCreation / 1_000_000) * price.cacheWrite +
+    (c.cacheRead / 1_000_000) * price.cacheRead +
+    (c.output / 1_000_000) * price.output
+  );
+}
+
+function fmtCost(n: number): string {
+  if (n <= 0) return "$0.00";
+  if (n < 0.01) return "<$0.01";
+  return `$${n.toFixed(2)}`;
+}
+
 type Position = { top: number; left: number; right: number };
 
 // Rendered into a portal (not inline) so it can escape ancestors that clip
@@ -113,6 +150,14 @@ export function BurnedTokensTooltip({
   const models = Object.entries(perModel)
     .filter(([, c]) => componentsTotal(c) > 0)
     .sort((a, b) => componentsTotal(b[1]) - componentsTotal(a[1]));
+  const modelCosts = models.map(([model, c]) => {
+    const price = priceForModel(model);
+    return { model, c, cost: price ? estimateCost(c, price) : null };
+  });
+  const totalCost = modelCosts.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+  const hasUnpriced = modelCosts.some((m) => m.cost === null);
+  const totalCostUnknown = modelCosts.length === 0 || modelCosts.every((m) => m.cost === null);
+  const totalCostText = totalCostUnknown ? "—" : fmtCost(totalCost);
 
   function handleCopy(e: React.MouseEvent) {
     e.stopPropagation();
@@ -123,16 +168,18 @@ export function BurnedTokensTooltip({
       `Cache read: ${cacheRead.toLocaleString()}`,
       `Output: ${output.toLocaleString()}`,
       `Total: ${total.toLocaleString()}`,
+      `Estimated cost: ${totalCostText}${!totalCostUnknown && hasUnpriced ? " (partial — some models unpriced)" : ""}`,
     ];
-    if (models.length > 0) {
-      lines.push("", models.length > 1 ? "By model:" : "Model:");
-      for (const [model, c] of models) {
+    if (modelCosts.length > 0) {
+      lines.push("", modelCosts.length > 1 ? "By model:" : "Model:");
+      for (const { model, c, cost } of modelCosts) {
         const t = componentsTotal(c);
         const pct = total > 0 ? Math.round((t / total) * 100) : 0;
+        const costText = cost != null ? fmtCost(cost) : "cost unavailable";
         lines.push(
-          models.length > 1
-            ? `${shortModelName(model)}: ${t.toLocaleString()} (${pct}%)`
-            : `${shortModelName(model)}: ${t.toLocaleString()}`
+          modelCosts.length > 1
+            ? `${shortModelName(model)}: ${t.toLocaleString()} (${pct}%), ${costText}`
+            : `${shortModelName(model)}: ${t.toLocaleString()}, ${costText}`
         );
       }
     }
@@ -187,12 +234,17 @@ export function BurnedTokensTooltip({
               <Row label="Cache read" value={cacheRead} />
               <Row label="Output" value={output} />
             </div>
-            {models.length > 0 && (
+            <div className="border-t border-zinc-700 my-1.5" />
+            <div className="flex justify-between gap-3 tabular-nums">
+              <span className="text-zinc-400 font-medium">Estimated cost</span>
+              <span className="text-zinc-100 font-medium">{totalCostText}</span>
+            </div>
+            {modelCosts.length > 0 && (
               <>
                 <div className="border-t border-zinc-700 my-1.5" />
-                <div className="text-zinc-400 font-medium mb-1">{models.length > 1 ? "By model" : "Model"}</div>
+                <div className="text-zinc-400 font-medium mb-1">{modelCosts.length > 1 ? "By model" : "Model"}</div>
                 <div className="space-y-0.5 tabular-nums">
-                  {models.map(([model, c]) => {
+                  {modelCosts.map(({ model, c, cost }) => {
                     const t = componentsTotal(c);
                     const pct = total > 0 ? Math.round((t / total) * 100) : 0;
                     return (
@@ -202,12 +254,17 @@ export function BurnedTokensTooltip({
                           {shortModelName(model)}
                         </span>
                         <span className="text-zinc-300">
-                          {models.length > 1 ? `${fmtTokens(t)} (${pct}%)` : fmtTokens(t)}
+                          {modelCosts.length > 1 ? `${fmtTokens(t)} (${pct}%)` : fmtTokens(t)}
+                          {" · "}
+                          {cost != null ? fmtCost(cost) : "—"}
                         </span>
                       </div>
                     );
                   })}
                 </div>
+                {hasUnpriced && (
+                  <div className="text-zinc-600 mt-1">* pricing unavailable for some models</div>
+                )}
               </>
             )}
           </div>,
