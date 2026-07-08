@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/cveld/claude-code-dashboard/compare/v0.3.0...v0.4.0) (2026-07-05)
+
+
+### Features
+
+* gallery responsive viewer with phone device presets ([c1a3ba6](https://github.com/cveld/claude-code-dashboard/commit/c1a3ba635dd1ab8cbb4e3e6dd9052d9c08274f11))
+* **hooks:** highlight sessions awaiting permission on the dashboard ([96ab180](https://github.com/cveld/claude-code-dashboard/commit/96ab180b7ae08c95e3cf4b1cba4e6bee9bc5d155))
+* **mobile:** hamburger nav drawer with animated icon ([7b202e8](https://github.com/cveld/claude-code-dashboard/commit/7b202e85e890531020c2b920518ea8a4e4ff4987))
+* **mobile:** improve sessions list mobile experience ([a91fd81](https://github.com/cveld/claude-code-dashboard/commit/a91fd81c3675d4fda5671075b95b09e65278dd93))
+* natural scroll on list pages for mobile address bar hiding ([dbfd7a9](https://github.com/cveld/claude-code-dashboard/commit/dbfd7a908139e6f333fcf8eb7c780df1305ab2db))
+* **sessions:** show total tokens burned per session with breakdown ([53b3ab2](https://github.com/cveld/claude-code-dashboard/commit/53b3ab2f19c05ffd21e5db89c899046c5b4b66f0))
+* **settings:** configured hooks viewer for global Claude settings ([10188d6](https://github.com/cveld/claude-code-dashboard/commit/10188d6b16f73be244e00d3737151d6fd31c0b1f))
+
 ## [0.3.0](https://github.com/cveld/claude-code-dashboard/compare/v0.2.0...v0.3.0) (2026-06-25)
 
 
