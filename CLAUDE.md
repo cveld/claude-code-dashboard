@@ -10,6 +10,7 @@
 | `docs/testing.md` | Playwright e2e, screenshot script, test-results folder |
 | `docs/gallery.md` | Dev-only gallery & ResponsiveViewer: DEVICE_PRESETS, CLIP_PRESETS, ChromeBar scroll-away, toggles, ScreenDimensions |
 | `docs/sessions/sessions-planned-index.md` | Open plans for upcoming sessions |
+| `docs/windows-tray.md` | Windows tray app (windows-tray/ClaudeTokenTray): WinUI 3 + H.NotifyIcon, structure, build/run, GeneratedIconSource text-centering gotcha |
 
 # Workspace Dashboard App
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="ClaudeTokenTray.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ClaudeTokenTray"
+    xmlns:tb="using:H.NotifyIcon">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- Other merged dictionaries here -->
+            </ResourceDictionary.MergedDictionaries>
+
+            <XamlUICommand x:Key="RefreshCommand" Label="Refresh now" />
+            <XamlUICommand x:Key="IconStyleNumberCommand" Label="Icon: Number" />
+            <XamlUICommand x:Key="IconStyleBarsCommand" Label="Icon: Bars" />
+            <XamlUICommand x:Key="StartWithWindowsCommand" Label="Start with Windows" />
+            <XamlUICommand x:Key="ExitCommand" Label="Exit" />
+
+            <tb:TaskbarIcon
+                x:Key="TrayIcon"
+                ToolTipText="Claude token usage"
+                NoLeftClickDelay="True">
+                <tb:TaskbarIcon.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Command="{StaticResource RefreshCommand}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Command="{StaticResource IconStyleNumberCommand}" />
+                        <MenuFlyoutItem Command="{StaticResource IconStyleBarsCommand}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Command="{StaticResource StartWithWindowsCommand}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Command="{StaticResource ExitCommand}" />
+                    </MenuFlyout>
+                </tb:TaskbarIcon.ContextFlyout>
+            </tb:TaskbarIcon>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

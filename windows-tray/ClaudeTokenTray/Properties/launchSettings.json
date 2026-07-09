@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ClaudeTokenTray (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ClaudeTokenTray (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
