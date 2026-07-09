@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { DashboardNav } from "./components/DashboardNav";
+import { MemoryUsageBadge } from "./components/MemoryUsageBadge";
 import {
   ProjectInfo,
   SessionWithProject,
@@ -127,15 +128,18 @@ export default function Home() {
               refreshCount={refreshCount}
             />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between w-full">
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                  Projects
-                  {visibleProjects.length !== projects.length && (
-                    <span className="ml-2 normal-case font-normal text-zinc-600">
-                      {visibleProjects.length} of {projects.length}
-                    </span>
-                  )}
-                </h2>
+              <div className="flex items-center justify-between w-full gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 shrink-0">
+                    Projects
+                    {visibleProjects.length !== projects.length && (
+                      <span className="ml-2 normal-case font-normal text-zinc-600">
+                        {visibleProjects.length} of {projects.length}
+                      </span>
+                    )}
+                  </h2>
+                  <MemoryUsageBadge />
+                </div>
                 <button
                   onClick={() => setSortAsc((a) => !a)}
                   className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"

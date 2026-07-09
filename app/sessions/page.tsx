@@ -18,6 +18,7 @@ import {
   timeAgo,
 } from "../lib/dashboard";
 import { BurnedTokensTooltip } from "../components/BurnedTokensTooltip";
+import { MemoryUsageBadge } from "../components/MemoryUsageBadge";
 import { useDataRefresh, type ChangeEvent } from "../lib/useDataRefresh";
 import { buildMonitorToolCall } from "../lib/monitorToolCall";
 
@@ -512,16 +513,19 @@ function SessionsPageInner() {
 
   // Controls bar — shared between list and split mode
   const controlsBar = (
-    <div className="flex items-center justify-between w-full">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-        Sessions
-        {!loading && (
-          <span className="ml-2 normal-case font-normal text-zinc-600">
-            {visibleSessions.length}
-          </span>
-        )}
-      </h2>
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between w-full gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 shrink-0">
+          Sessions
+          {!loading && (
+            <span className="ml-2 normal-case font-normal text-zinc-600">
+              {visibleSessions.length}
+            </span>
+          )}
+        </h2>
+        <MemoryUsageBadge />
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={() => setSortAsc((a) => !a)}
           title={sortAsc ? "Oldest first" : "Newest first"}
