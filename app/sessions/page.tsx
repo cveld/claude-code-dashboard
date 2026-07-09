@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useCallback, useRef, useLayoutEffect, Suspense } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -200,10 +201,28 @@ function SessionsPageInner() {
   const [sendLoading, setSendLoading] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const menuRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const menuPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     sessionStorage.setItem("sessions-unread-only", String(showUnreadOnly));
   }, [showUnreadOnly]);
+
+  useEffect(() => {
+    if (!openMenuKey) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      const btnWrap = menuRefs.current.get(openMenuKey!);
+      const panel = menuPanelRef.current;
+      if ((!btnWrap || !btnWrap.contains(target)) && (!panel || !panel.contains(target))) {
+        setOpenMenuKey(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuKey]);
 
   useEffect(() => {
     function pollMonitors() {
@@ -505,9 +524,11 @@ function SessionsPageInner() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setSortAsc((a) => !a)}
+          title={sortAsc ? "Oldest first" : "Newest first"}
           className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
         >
-          {sortAsc ? "↑ Oldest first" : "↓ Newest first"}
+          {sortAsc ? "↑" : "↓"}
+          <span className="hidden md:inline">{sortAsc ? " Oldest first" : " Newest first"}</span>
         </button>
         <div className="flex rounded-md overflow-hidden border border-zinc-700">
           <button
@@ -527,26 +548,13 @@ function SessionsPageInner() {
             Unread
           </button>
         </div>
-        <div className="flex rounded-md overflow-hidden border border-zinc-700">
-          <button
-            onClick={() => setLayoutMode("list")}
-            title="List view"
-            className={`px-2 py-1 transition-colors ${
-              layoutMode === "list" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <IconList />
-          </button>
-          <button
-            onClick={() => setLayoutMode("split")}
-            title="Split view"
-            className={`px-2 py-1 transition-colors border-l border-zinc-700 ${
-              layoutMode === "split" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <IconSplit />
-          </button>
-        </div>
+        <button
+          onClick={() => setLayoutMode(layoutMode === "list" ? "split" : "list")}
+          title={layoutMode === "list" ? "Switch to split view" : "Switch to list view"}
+          className="px-2 py-1 rounded-md border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+        >
+          {layoutMode === "list" ? <IconSplit /> : <IconList />}
+        </button>
       </div>
     </div>
   );
@@ -843,7 +851,7 @@ function SessionsPageInner() {
                                 </div>
                                 {/* Row 2: path + msgs + ctx + actions */}
                                 <div className="flex items-center justify-between gap-1 mt-0.5">
-                                  <div className="flex items-center gap-1.5 min-w-0">
+                                  <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
                                     <span className="text-xs text-zinc-500 truncate font-mono">{s.projectDisplayPath}</span>
                                     <button
                                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyId(s.id); }}
@@ -867,21 +875,23 @@ function SessionsPageInner() {
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
                                     <button
-                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openSendModal(s); }}
-                                      title="Send message to this session"
-                                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 whitespace-nowrap flex items-center gap-1"
-                                    >
-                                      {monitorActiveSessions.has(s.id) && (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                                      )}
-                                      Send →
-                                    </button>
-                                    <button
-                                      onClick={() => markSession(s, !unread)}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); markSession(s, !unread); }}
                                       title={unread ? "Mark read" : "Mark unread"}
-                                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 whitespace-nowrap"
+                                      className="p-1 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                                     >
-                                      {unread ? "Mark read" : "Mark unread"}
+                                      {unread ? (
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M3 8v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8" />
+                                          <path d="M3 8 12 3l9 5" />
+                                          <path d="M3 8l7 4.5" />
+                                          <path d="M21 8l-7 4.5" />
+                                        </svg>
+                                      ) : (
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                                          <path d="m3 7 9 6 9-6" />
+                                        </svg>
+                                      )}
                                     </button>
                                     <button
                                       onClick={() => toggleTail(sessionKey, s.projectSlug, s.id)}
@@ -896,6 +906,64 @@ function SessionsPageInner() {
                                         <path d="M6 4l8 6-8 6V4z" />
                                       </svg>
                                     </button>
+                                    <div
+                                      className="relative"
+                                      ref={(el) => {
+                                        if (el) menuRefs.current.set(sessionKey, el);
+                                        else menuRefs.current.delete(sessionKey);
+                                      }}
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          if (openMenuKey === sessionKey) {
+                                            setOpenMenuKey(null);
+                                          } else {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                            setOpenMenuKey(sessionKey);
+                                          }
+                                        }}
+                                        title="More actions"
+                                        className={`p-1 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors relative ${
+                                          openMenuKey === sessionKey ? "opacity-100 bg-zinc-800 text-zinc-100" : "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                                        }`}
+                                      >
+                                        {monitorActiveSessions.has(s.id) && (
+                                          <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-green-400" />
+                                        )}
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                                          <circle cx="5" cy="12" r="1.8" />
+                                          <circle cx="12" cy="12" r="1.8" />
+                                          <circle cx="19" cy="12" r="1.8" />
+                                        </svg>
+                                      </button>
+                                      {openMenuKey === sessionKey && menuPos && typeof document !== "undefined" &&
+                                        createPortal(
+                                          <div
+                                            ref={menuPanelRef}
+                                            style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+                                            className="z-50 min-w-[9rem] bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg py-1"
+                                          >
+                                            <button
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setOpenMenuKey(null);
+                                                openSendModal(s);
+                                              }}
+                                              className="w-full text-left text-xs px-3 py-1.5 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                                            >
+                                              {monitorActiveSessions.has(s.id) && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                                              )}
+                                              Send message
+                                            </button>
+                                          </div>,
+                                          document.body
+                                        )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
