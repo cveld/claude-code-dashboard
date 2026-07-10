@@ -11,6 +11,7 @@ the system tray, independent of `npm run dev` running.
 | `App.xaml` | Defines the `TaskbarIcon` as an `x:Key="TrayIcon"` resource (not in any window's visual tree — this app never shows a window), plus `XamlUICommand` resources (`RefreshCommand`, `IconStyleNumberCommand`, `IconStyleBarsCommand`, `StartWithWindowsCommand`, `ExitCommand`) wired to the tray's context menu. |
 | `App.xaml.cs` | `OnLaunched` fetches `TrayIcon` from `Resources` and hands it to `TrayIconService`. No `Window` is ever created. |
 | `TokenUsage.cs` / `TokenUsageClient.cs` | C# port of `app/api/token-usage/route.ts`: reads `~/.claude/.credentials.json` → `claudeAiOauth.accessToken`, calls `https://api.anthropic.com/api/oauth/usage` (Bearer + `anthropic-beta: oauth-2025-04-20`), parses `five_hour`/`seven_day`/`seven_day_sonnet`. Utilization is already 0-100 (not a 0-1 fraction) — see `TokenUsageBadge.tsx` for the reference scale. |
+| `SessionMemoryUsage.cs` / `SessionMemoryClient.cs` | C# counterpart of `app/api/active-sessions/route.ts`'s memory lookup / `MemoryUsageBadge.tsx`: reads `~/.claude/sessions/*.json` for active session `pid`/`cwd`, then queries `Process.GetProcessById(pid).WorkingSet64`/`PagedMemorySize64` directly (no PowerShell shell-out needed in-process). Returns `null` when no sessions are active. |
 | `TrayIconService.cs` | Owns the `TaskbarIcon`, polls every 5 minutes (+ manual "Refresh now"), redraws the icon, builds the tooltip, and handles the "Start with Windows" registry toggle (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`). |
 
 ## Icon style setting
@@ -33,6 +34,16 @@ Regardless of icon style, hovering the tray icon shows a custom `TaskbarIcon.Tra
 Sonnet) plus percentage and reset time — so the bar breakdown is always available on hover, not
 just when "Bars" is the active icon style. `ToolTipText` (plain string) is still set alongside
 it as the fallback for contexts that don't support custom tooltips.
+
+## Memory usage
+
+Each poll also refreshes per-process RAM/paged memory for active Claude Code sessions
+(`SessionMemoryClient.GetUsage`), summarized as "N sessions · X RAM · Y paged" — the tray
+equivalent of the dashboard's `MemoryUsageBadge`. This line is appended to `ToolTipText` in
+every `DisplayState` (Loading/Usage/NotLoggedIn/Error), and also rendered as an extra row inside
+`BuildTooltipContent` when in the `Usage` state. If no `~/.claude/sessions/*.json` file resolves
+to a still-running pid, `_memoryUsage` stays `null` and the line is omitted entirely rather than
+showing "0 sessions".
 
 ## Build / run
 

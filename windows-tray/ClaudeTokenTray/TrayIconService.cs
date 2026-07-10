@@ -47,6 +47,7 @@ public sealed class TrayIconService : IDisposable
 
     private Icon? _currentIcon;
     private TokenUsage? _lastGood;
+    private SessionMemoryUsage? _memoryUsage;
     private IconStyle _iconStyle;
     private DisplayState _state = DisplayState.Loading;
     private bool _stale;
@@ -85,6 +86,15 @@ public sealed class TrayIconService : IDisposable
 
     private async Task RefreshAsync()
     {
+        try
+        {
+            _memoryUsage = await Task.Run(SessionMemoryClient.GetUsage).ConfigureAwait(true);
+        }
+        catch
+        {
+            // leave previous memory reading in place
+        }
+
         try
         {
             var usage = await TokenUsageClient.GetUsageAsync().ConfigureAwait(true);
@@ -144,40 +154,47 @@ public sealed class TrayIconService : IDisposable
     // usage data arrives and when the user switches icon style, so the two never drift apart.
     private void Render()
     {
+        string tooltipText;
+
         switch (_state)
         {
             case DisplayState.Loading:
                 SetIconText("…", Color.Gray);
-                _trayIcon.ToolTipText = "Claude token usage";
+                tooltipText = "Claude token usage";
                 _trayIcon.TrayToolTip = null;
                 break;
 
             case DisplayState.NotLoggedIn:
                 SetIconText("!", Color.Gray);
-                _trayIcon.ToolTipText = "Not logged in to Claude";
+                tooltipText = "Not logged in to Claude";
                 _trayIcon.TrayToolTip = null;
                 break;
 
             case DisplayState.Error:
                 SetIconText("?", Color.Gray);
-                _trayIcon.ToolTipText = "Failed to reach Claude usage API";
+                tooltipText = "Failed to reach Claude usage API";
                 _trayIcon.TrayToolTip = null;
                 break;
 
             case DisplayState.Usage:
+            default:
                 var usage = _lastGood!;
                 if (_iconStyle == IconStyle.Bars)
                     SetIconBars(usage);
                 else
                     SetIconNumber(usage);
 
-                var tooltipText = BuildTooltipText(usage);
+                tooltipText = BuildTooltipText(usage);
                 if (_stale)
                     tooltipText += "\n(stale - last refresh failed)";
-                _trayIcon.ToolTipText = Truncate(tooltipText);
-                _trayIcon.TrayToolTip = BuildTooltipContent(usage, _stale);
+                _trayIcon.TrayToolTip = BuildTooltipContent(usage, _stale, _memoryUsage);
                 break;
         }
+
+        if (_memoryUsage is not null)
+            tooltipText += "\n" + FormatMemorySummary(_memoryUsage);
+
+        _trayIcon.ToolTipText = Truncate(tooltipText);
     }
 
     private void SetIconNumber(TokenUsage usage)
@@ -312,9 +329,19 @@ public sealed class TrayIconService : IDisposable
             sb.Append($" (resets in {remaining})");
     }
 
+    private static string FormatMemorySummary(SessionMemoryUsage mem) =>
+        $"{mem.SessionCount} session{(mem.SessionCount == 1 ? "" : "s")} · {FormatBytes(mem.TotalMemoryBytes)} RAM · {FormatBytes(mem.TotalPagedMemoryBytes)} paged";
+
+    private static string FormatBytes(long bytes)
+    {
+        const double gb = 1024.0 * 1024 * 1024;
+        const double mb = 1024.0 * 1024;
+        return bytes >= gb ? $"{bytes / gb:0.0} GB" : $"{Math.Round(bytes / mb)} MB";
+    }
+
     // Custom hover popup shown regardless of icon style: same left-5h/right-... bar visual as
     // the icon itself, one row per usage window, so the breakdown is always available on hover.
-    private static UIElement BuildTooltipContent(TokenUsage usage, bool stale)
+    private static UIElement BuildTooltipContent(TokenUsage usage, bool stale, SessionMemoryUsage? memoryUsage)
     {
         var root = new StackPanel
         {
@@ -334,6 +361,17 @@ public sealed class TrayIconService : IDisposable
         AddTooltipRow(root, "5h", usage.FiveHour);
         AddTooltipRow(root, "7d", usage.SevenDay);
         AddTooltipRow(root, "7d Sonnet", usage.SevenDaySonnet);
+
+        if (memoryUsage is not null)
+        {
+            root.Children.Add(new TextBlock
+            {
+                Text = FormatMemorySummary(memoryUsage),
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.LightGray),
+                FontSize = 11,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        }
 
         if (stale)
         {
