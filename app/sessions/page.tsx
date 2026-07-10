@@ -19,6 +19,7 @@ import {
 } from "../lib/dashboard";
 import { BurnedTokensTooltip } from "../components/BurnedTokensTooltip";
 import { MemoryUsageBadge } from "../components/MemoryUsageBadge";
+import { ListSkeleton } from "../components/ListSkeleton";
 import { useDataRefresh, type ChangeEvent } from "../lib/useDataRefresh";
 import { buildMonitorToolCall } from "../lib/monitorToolCall";
 
@@ -192,6 +193,7 @@ function SessionsPageInner() {
   const [toast, setToast] = useState<string | null>(null);
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [tailCache, setTailCache] = useState<Record<string, TailMessage[]>>({});
+  const [tailErrors, setTailErrors] = useState<Set<string>>(new Set());
   const [tailSize, setTailSize] = useState<Record<string, number>>({});
   const [changedSessions, setChangedSessions] = useState<Set<string>>(new Set());
   const [hookNotifs, setHookNotifs] = useState<Record<string, HookEvent>>({});
@@ -419,8 +421,12 @@ function SessionsPageInner() {
 
   function fetchTail(key: string, slug: string, id: string, size: number) {
     fetch(`/api/projects/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(id)}?tail=${size}`)
-      .then((r) => r.json())
-      .then((data) => setTailCache((prev) => ({ ...prev, [key]: data.messages ?? [] })));
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("not-found"))))
+      .then((data) => {
+        setTailErrors((prev) => { if (!prev.has(key)) return prev; const next = new Set(prev); next.delete(key); return next; });
+        setTailCache((prev) => ({ ...prev, [key]: data.messages ?? [] }));
+      })
+      .catch(() => setTailErrors((prev) => new Set(prev).add(key)));
   }
 
   function toggleTail(key: string, slug: string, id: string) {
@@ -567,7 +573,7 @@ function SessionsPageInner() {
   const splitSessionList = (
     <div className="py-2">
       {loading ? (
-        <p className="text-zinc-500 text-sm px-3 py-2">Loading…</p>
+        <div className="px-1"><ListSkeleton count={8} compact /></div>
       ) : visibleSessions.length === 0 ? (
         <p className="text-zinc-500 text-sm px-3 py-2">No sessions found.</p>
       ) : (
@@ -755,7 +761,7 @@ function SessionsPageInner() {
       <div className="max-w-5xl w-full mx-auto px-4 py-4">
       <section>
         {loading ? (
-          <p className="text-zinc-500 text-sm">Loading…</p>
+          <ListSkeleton />
         ) : visibleSessions.length === 0 ? (
           <p className="text-zinc-500 text-sm">No sessions found.</p>
         ) : (
@@ -813,6 +819,7 @@ function SessionsPageInner() {
                         const sessionKey = `${s.projectSlug}/${s.id}`;
                         const isExpanded = expandedSessions.has(sessionKey);
                         const tail = tailCache[sessionKey];
+                        const tailFailed = tailErrors.has(sessionKey);
                         const unread = isUnread(s, readState);
                         const hookNotif = hookNotifs[sessionKey];
                         const ctxPct = s.lastInputTokens != null ? Math.min(Math.round(s.lastInputTokens / CONTEXT_WINDOW * 100), 100) : null;
@@ -988,7 +995,9 @@ function SessionsPageInner() {
                                   </button>
                                 )}
                                 <div className="px-4 py-3 space-y-2.5">
-                                  {!tail ? (
+                                  {tailFailed ? (
+                                    <p className="text-xs text-zinc-600">Couldn&apos;t load this session — it may have been deleted or moved.</p>
+                                  ) : !tail ? (
                                     <p className="text-xs text-zinc-600">Loading…</p>
                                   ) : tail.length === 0 ? (
                                     <p className="text-xs text-zinc-600">No messages</p>

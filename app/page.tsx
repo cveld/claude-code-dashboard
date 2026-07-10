@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { DashboardNav } from "./components/DashboardNav";
 import { MemoryUsageBadge } from "./components/MemoryUsageBadge";
+import { ListSkeleton } from "./components/ListSkeleton";
 import {
   ProjectInfo,
   SessionWithProject,
@@ -157,7 +158,7 @@ export default function Home() {
       <div className="max-w-5xl w-full mx-auto px-4 py-4">
       <section>
         {loading ? (
-          <p className="text-zinc-500 text-sm">Loading…</p>
+          <ListSkeleton />
         ) : visibleProjects.length === 0 ? (
           <p className="text-zinc-500 text-sm">No projects match the current filter.</p>
         ) : (

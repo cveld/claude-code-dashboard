@@ -61,6 +61,19 @@ function contextBarColor(pct: number): string {
   return "bg-blue-500";
 }
 
+function TranscriptSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className={`flex gap-3 animate-pulse ${i % 2 === 0 ? "flex-row-reverse" : "flex-row"}`}>
+          <div className="shrink-0 w-7 h-7 rounded-full bg-zinc-800" />
+          <div className={`h-12 rounded-xl bg-zinc-800 ${i % 2 === 0 ? "w-2/5" : "w-3/5"}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StatsBar({ stats }: { stats: SessionStats }) {
   const pct = Math.round((stats.currentContext / stats.contextWindowSize) * 100);
   const cacheTotal = stats.totalCacheCreation + stats.totalCacheRead;
@@ -119,6 +132,7 @@ export function TranscriptPanel({
   const [title, setTitle] = useState<string | null>(null);
   const [displayPath, setDisplayPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [isRead, setIsRead] = useState(false);
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [ideWindow, setIdeWindow] = useState<IdeWindow | null>(null);
@@ -186,19 +200,30 @@ export function TranscriptPanel({
     if (change && change.sessionId !== id) return;
     const wasNearBottom = isNearBottom();
     Promise.all([
-      fetch(`/api/projects/${slug}/sessions/${id}`).then((r) => r.json()),
-      fetch(`/api/projects/${slug}/sessions/${id}/stats`).then((r) => r.json()),
-    ]).then(([transcript, freshStats]) => {
-      setMessages(transcript.messages ?? []);
-      if (!freshStats.error) setStats(freshStats);
-      if (wasNearBottom) {
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      fetch(`/api/projects/${slug}/sessions/${id}`),
+      fetch(`/api/projects/${slug}/sessions/${id}/stats`),
+    ]).then(([transcriptRes, statsRes]) => {
+      if (!transcriptRes.ok) {
+        setNotFound(true);
+        return;
       }
+      return Promise.all([transcriptRes.json(), statsRes.ok ? statsRes.json() : null]).then(
+        ([transcript, freshStats]) => {
+          setNotFound(false);
+          setMessages(transcript.messages ?? []);
+          if (freshStats && !freshStats.error) setStats(freshStats);
+          if (wasNearBottom) {
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          }
+        }
+      );
     });
   }, [slug, id]);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setNotFound(false);
     setMessages([]);
     setTitle(null);
     setDisplayPath(null);
@@ -206,51 +231,62 @@ export function TranscriptPanel({
     pendingScrollRef.current = true;
 
     fetch(`/api/projects/${slug}/sessions/${id}/stats`)
-      .then((r) => r.json())
-      .then((s) => { if (!s.error) setStats(s); });
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => { if (!cancelled && s && !s.error) setStats(s); });
 
     setIdeWindow(null);
 
-    Promise.all([
-      fetch(`/api/projects/${slug}/sessions/${id}`).then((r) => r.json()),
-      fetch(`/api/projects/${slug}/sessions`).then((r) => r.json()),
-      fetch("/api/read-state").then((r) => r.json()),
-      fetch("/api/settings").then((r) => r.json()),
-      fetch("/api/projects").then((r) => r.json()),
-      fetch("/api/ide-windows").then((r) => r.json()),
-    ]).then(([transcript, sessions, readState, settings, projects, ideWindows]) => {
-      setIdeWindow(
-        Array.isArray(ideWindows)
-          ? findIdeWindowForSlug(decodeURIComponent(slug), ideWindows) ?? null
-          : null
-      );
-      setMessages(transcript.messages ?? []);
-      const session = Array.isArray(sessions)
-        ? sessions.find((s: { id: string }) => s.id === id)
-        : null;
-      setTitle(session?.title ?? null);
-      const project = Array.isArray(projects)
-        ? projects.find((p: { slug: string }) => p.slug === decodeURIComponent(slug))
-        : null;
-      setDisplayPath(project?.displayPath ?? null);
-
-      const readTimestamp: string | undefined = readState[readStateKey];
-      const lastActivity: string = session?.lastActivity ?? "";
-      const currentlyRead = !!readTimestamp && (!lastActivity || readTimestamp >= lastActivity);
-      setIsRead(currentlyRead);
-
-      if (settings?.autoMarkAsRead && !currentlyRead) {
-        fetch("/api/read-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slug: readStateKey }),
-        });
-        setIsRead(true);
-        onReadStateChange?.();
+    fetch(`/api/projects/${slug}/sessions/${id}`).then((transcriptRes) => {
+      if (!transcriptRes.ok) {
+        if (cancelled) return;
+        setNotFound(true);
+        setLoading(false);
+        return;
       }
+      return Promise.all([
+        transcriptRes.json(),
+        fetch(`/api/projects/${slug}/sessions`).then((r) => (r.ok ? r.json() : [])),
+        fetch("/api/read-state").then((r) => r.json()),
+        fetch("/api/settings").then((r) => r.json()),
+        fetch("/api/projects").then((r) => r.json()),
+        fetch("/api/ide-windows").then((r) => r.json()),
+      ]).then(([transcript, sessions, readState, settings, projects, ideWindows]) => {
+        if (cancelled) return;
+        setIdeWindow(
+          Array.isArray(ideWindows)
+            ? findIdeWindowForSlug(decodeURIComponent(slug), ideWindows) ?? null
+            : null
+        );
+        setMessages(transcript.messages ?? []);
+        const session = Array.isArray(sessions)
+          ? sessions.find((s: { id: string }) => s.id === id)
+          : null;
+        setTitle(session?.title ?? null);
+        const project = Array.isArray(projects)
+          ? projects.find((p: { slug: string }) => p.slug === decodeURIComponent(slug))
+          : null;
+        setDisplayPath(project?.displayPath ?? null);
 
-      setLoading(false);
+        const readTimestamp: string | undefined = readState[readStateKey];
+        const lastActivity: string = session?.lastActivity ?? "";
+        const currentlyRead = !!readTimestamp && (!lastActivity || readTimestamp >= lastActivity);
+        setIsRead(currentlyRead);
+
+        if (settings?.autoMarkAsRead && !currentlyRead) {
+          fetch("/api/read-state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slug: readStateKey }),
+          });
+          setIsRead(true);
+          onReadStateChange?.();
+        }
+
+        setLoading(false);
+      });
     });
+
+    return () => { cancelled = true; };
   }, [slug, id, readStateKey]);
 
   // Scroll to bottom once the freshly opened transcript is actually in the DOM.
@@ -345,7 +381,10 @@ export function TranscriptPanel({
             {title ? (
               <h2 className="text-base font-semibold text-white truncate">{title}</h2>
             ) : (
-              !loading && <h2 className="text-base font-semibold text-zinc-500 italic truncate">Untitled</h2>
+              !loading && !notFound && <h2 className="text-base font-semibold text-zinc-500 italic truncate">Untitled</h2>
+            )}
+            {!loading && notFound && (
+              <h2 className="text-base font-semibold text-zinc-500 italic truncate">Session not found</h2>
             )}
             {displayPath && (
               <div className="flex items-center gap-1 mt-0.5 min-w-0">
@@ -391,7 +430,7 @@ export function TranscriptPanel({
                 VS
               </button>
             )}
-            {!loading && (
+            {!loading && !notFound && (
               <button
                 onClick={toggleRead}
                 className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
@@ -423,7 +462,9 @@ export function TranscriptPanel({
       {/* Scrollable messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         {loading ? (
-          <p className="text-zinc-500 text-sm">Loading…</p>
+          <TranscriptSkeleton />
+        ) : notFound ? (
+          <p className="text-zinc-500 text-sm">Session not found — it may have been deleted or moved.</p>
         ) : messages.length === 0 ? (
           <p className="text-zinc-500 text-sm">No messages in this session.</p>
         ) : (

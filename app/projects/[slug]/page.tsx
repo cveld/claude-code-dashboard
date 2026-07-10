@@ -6,6 +6,7 @@ import Link from "next/link";
 import { HookEvent, type TokenBreakdown } from "@/app/lib/dashboard";
 import { useDataRefresh, type ChangeEvent } from "@/app/lib/useDataRefresh";
 import { BurnedTokensTooltip } from "@/app/components/BurnedTokensTooltip";
+import { ListSkeleton } from "@/app/components/ListSkeleton";
 
 interface SessionInfo {
   id: string;
@@ -102,6 +103,7 @@ export default function ProjectPage() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [readState, setReadState] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(() =>
     typeof window !== "undefined" && localStorage.getItem("show-unread-only") === "true"
   );
@@ -124,26 +126,33 @@ export default function ProjectPage() {
   const loadData = useCallback((change?: ChangeEvent) => {
     const isInitial = change === undefined;
     const promises: Promise<unknown>[] = [
-      fetch(`/api/projects/${slug}/sessions`).then((r) => r.json()),
+      fetch(`/api/projects/${slug}/sessions`).then((r) => (r.ok ? r.json() : Promise.reject(new Error("not-found")))),
       fetch("/api/read-state").then((r) => r.json()),
     ];
     if (isInitial) promises.push(fetch("/api/hook-events").then((r) => r.json()));
 
-    Promise.all(promises).then((results) => {
-      const [data, rs] = results as [SessionInfo[], Record<string, string>];
-      setSessions(data);
-      setReadState(rs);
-      if (isInitial) {
-        const hooks = results[2] as Record<string, HookEvent>;
-        const projectSlug = decodeURIComponent(slug);
-        const scoped: Record<string, HookEvent> = {};
-        for (const event of Object.values(hooks)) {
-          if (event.projectSlug === projectSlug) scoped[event.sessionId] = event;
+    Promise.all(promises)
+      .then((results) => {
+        const [data, rs] = results as [SessionInfo[], Record<string, string>];
+        setNotFound(false);
+        setSessions(data);
+        setReadState(rs);
+        if (isInitial) {
+          const hooks = results[2] as Record<string, HookEvent>;
+          const projectSlug = decodeURIComponent(slug);
+          const scoped: Record<string, HookEvent> = {};
+          for (const event of Object.values(hooks)) {
+            if (event.projectSlug === projectSlug) scoped[event.sessionId] = event;
+          }
+          setHookNotifs(scoped);
         }
-        setHookNotifs(scoped);
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      })
+      .catch(() => {
+        setNotFound(true);
+        setSessions([]);
+        setLoading(false);
+      });
   }, [slug]);
 
   useEffect(() => {
@@ -256,7 +265,9 @@ export default function ProjectPage() {
       <div>
       <div className="max-w-5xl w-full mx-auto px-4 py-4">
       {loading ? (
-        <p className="text-zinc-500 text-sm">Loading…</p>
+        <ListSkeleton />
+      ) : notFound ? (
+        <p className="text-zinc-500 text-sm">Project not found — it may have been removed or renamed.</p>
       ) : visibleSessions.length === 0 ? (
         <p className="text-zinc-500 text-sm">{showUnreadOnly ? "No unread sessions." : "No sessions found."}</p>
       ) : (
