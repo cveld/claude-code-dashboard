@@ -4,13 +4,24 @@ import path from "path";
 import os from "os";
 import { spawn } from "child_process";
 
+// Inline slug function — same logic as app/lib/dashboard.ts pathToSlug,
+// avoids cross-module import issues with Turbopack in API routes.
+function pathToSlug(folderPath: string): string {
+  return folderPath.replace(/[:\\/\s]/g, "-");
+}
+
 export interface ActiveSession {
   pid: number;
   sessionId: string;
   cwd: string;
+  projectSlug: string;
   startedAt: number;
   version: string;
   entrypoint: string;
+  name?: string;
+  nameSource?: string;
+  title?: string;
+  titleSource?: string;
   memoryBytes?: number;
   pagedMemoryBytes?: number;
 }
@@ -61,6 +72,100 @@ function getMemoryUsage(pids: number[]): Promise<Map<number, MemoryUsage>> {
   });
 }
 
+// Look up a session's title from its transcript .jsonl file, reading only the
+// first 50 lines (the title is set early in the conversation).
+function findTranscriptTitle(sessionId: string, cwd: string): { title: string; source: string } | null {
+  const slug = pathToSlug(cwd);
+  if (!slug) return null;
+
+  const projectDir = path.join(os.homedir(), ".claude", "projects", slug);
+  if (!fs.existsSync(projectDir)) return null;
+
+  // Session .jsonl files are named <sessionId>.jsonl — some may have a different
+  // naming convention, so we check a few patterns.
+  const candidates = [
+    path.join(projectDir, `${sessionId}.jsonl`),
+  ];
+
+  // Also check for any .jsonl that contains this sessionId in the first line
+  try {
+    const dirFiles = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
+    for (const df of dirFiles) {
+      if (df === `${sessionId}.jsonl`) continue; // already checked
+      try {
+        const firstLine = readFirstLine(path.join(projectDir, df));
+        if (firstLine && firstLine.includes(sessionId)) {
+          candidates.push(path.join(projectDir, df));
+        }
+      } catch {
+        // skip
+      }
+    }
+  } catch {
+    // skip
+  }
+
+  for (const filePath of candidates) {
+    try {
+      if (!fs.existsSync(filePath)) continue;
+      const content = readFirstLines(filePath, 256 * 1024);
+      for (const line of content.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj.type === "ai-title" && obj.aiTitle) {
+            return { title: obj.aiTitle, source: "ai-title" };
+          }
+          if (obj.type === "custom-title" && obj.customTitle) {
+            return { title: obj.customTitle, source: "custom-title" };
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch (e) {
+      console.log(`[active-sessions]   error reading ${filePath}:`, e);
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function readFirstLine(filePath: string): string | null {
+  try {
+    const buf = Buffer.alloc(4096);
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+      const content = buf.toString("utf-8", 0, bytesRead);
+      const newline = content.indexOf("\n");
+      return newline >= 0 ? content.slice(0, newline) : content;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+// Read the first `maxBytes` of a file, returning full lines.
+// Useful for scanning transcript headers without loading the entire file.
+function readFirstLines(filePath: string, maxBytes: number): string {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const buf = Buffer.alloc(maxBytes);
+      const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+      return buf.toString("utf-8", 0, bytesRead);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
+
 export async function GET() {
   const sessionsDir = path.join(os.homedir(), ".claude", "sessions");
 
@@ -78,6 +183,16 @@ export async function GET() {
       active.push(obj);
     } catch {
       // skip
+    }
+  }
+
+  // Attach project slug and transcript titles.
+  for (const s of active) {
+    s.projectSlug = pathToSlug(s.cwd);
+    const titleInfo = findTranscriptTitle(s.sessionId, s.cwd);
+    if (titleInfo) {
+      s.title = titleInfo.title;
+      s.titleSource = titleInfo.source;
     }
   }
 

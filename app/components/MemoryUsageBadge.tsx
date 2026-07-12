@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { ActiveSession } from "@/app/api/active-sessions/route";
 
 // RAM footprint changes slowly and each poll spawns a PowerShell process on
@@ -37,22 +38,25 @@ export function MemoryUsageBadge() {
 
   if (!sessions) return null;
   const withMemory = sessions.filter((s) => s.memoryBytes != null);
-  if (withMemory.length === 0) return null;
+  const totalActive = sessions.length;
+  if (totalActive === 0) return null;
 
   const total = withMemory.reduce((sum, s) => sum + (s.memoryBytes ?? 0), 0);
   const totalPaged = withMemory.reduce((sum, s) => sum + (s.pagedMemoryBytes ?? 0), 0);
-  const tooltip = [
-    `Total paged: ${fmtBytes(totalPaged)}`,
-    "",
-    ...withMemory.map(
-      (s) => `${s.cwd} (pid ${s.pid}): ${fmtBytes(s.memoryBytes ?? 0)} RAM, ${fmtBytes(s.pagedMemoryBytes ?? 0)} paged`
-    ),
-  ].join("\n");
+  const tooltip = withMemory.length > 0
+    ? [
+        `Total paged: ${fmtBytes(totalPaged)}`,
+        "",
+        ...withMemory.map(
+          (s) => `${s.cwd} (pid ${s.pid}): ${fmtBytes(s.memoryBytes ?? 0)} RAM, ${fmtBytes(s.pagedMemoryBytes ?? 0)} paged`
+        ),
+      ].join("\n")
+    : `${totalActive} active process${totalActive === 1 ? "" : "es"} — no memory data available`;
 
   return (
-    <span className="flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums cursor-default" title={tooltip}>
+    <Link href="/processes" className="flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums hover:text-zinc-300 transition-colors" title={tooltip}>
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-      {withMemory.length} session{withMemory.length === 1 ? "" : "s"} · {fmtBytes(total)} RAM · {fmtBytes(totalPaged)} paged
-    </span>
+      {totalActive} session{totalActive === 1 ? "" : "s"}{withMemory.length > 0 ? ` · ${fmtBytes(total)} RAM · ${fmtBytes(totalPaged)} paged` : ""}
+    </Link>
   );
 }

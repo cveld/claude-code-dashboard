@@ -9,7 +9,11 @@ import { TokenUsageBadge } from "@/app/components/TokenUsageBadge";
 function SessionPageInner() {
   const { slug, id } = useParams<{ slug: string; id: string }>();
   const searchParams = useSearchParams();
-  const backHref = searchParams.get("from") === "sessions" ? "/sessions" : `/projects/${slug}`;
+  const from = searchParams.get("from");
+  let backHref: string;
+  if (from === "sessions") backHref = "/sessions";
+  else if (from === "processes") backHref = "/processes";
+  else backHref = `/projects/${slug}`;
 
   return (
     <div className="flex flex-col h-screen">

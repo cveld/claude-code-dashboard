@@ -114,3 +114,19 @@ Claude-Code hooks POSTen naar `POST /api/hooks` (`{ event: "stop"|"notification"
 - `useDataRefresh(onRefresh, onHookEvent?)` levert hook-events aan de client.
 - In `/sessions` en `/projects/[slug]` zet `handleHookEvent` een badge per sessie (groen vinkje = `stop`, amber bel = `notification`, rood vraagteken = `permission`) en toont een browser-`Notification` (permission wordt bij load gevraagd).
 - **Permission needed** (`type: "permission"`, gevoed door de `PermissionRequest`-hook, snippet op `/settings`): naast de rode vraagteken-badge (gepulseerd) krijgt de hele sessie-tile een rode achtergrond + ring zolang de sessie ongelezen is — dit blijft staan totdat de sessie als gelezen wordt gemarkeerd (geen auto-dismiss timer, in tegenstelling tot de amber `bg-amber-900/50` flash bij session-highlight-via-URL).
+
+## Processes (`/processes`)
+
+`app/processes/page.tsx` — overzicht van alle actieve Claude Code processen.
+
+Navigatie: klik op de `MemoryUsageBadge` in de header van `/` (toont "N sessions · X RAM · Y paged").
+
+| Element | Gedrag |
+|---|---|
+| Summary bar | Totaal aantal processen, totaal RAM, totaal paged memory |
+| Process table | Kolommen: PID, session name, cwd, memory (RAM / paged), startedAt, version, entrypoint. Gesorteerd op startedAt (nieuwste eerst). |
+| Per-process row | Klik opent het sessie-transcript via `/projects/<slug>/sessions/<id>?from=processes`. De `← Back` link gaat terug naar `/processes`. |
+| Copy session ID | Knop per rij om het session ID naar clipboard te kopiëren |
+| Refresh | Auto-refresh elke 2 minuten (zelfde poll-interval als `MemoryUsageBadge`) |
+
+Data: `GET /api/active-sessions` (zelfde API als `MemoryUsageBadge`).

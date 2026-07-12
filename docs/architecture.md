@@ -11,6 +11,7 @@
 | `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript (rendert `TranscriptPanel`) |
 | `/gallery` | `app/gallery/page.tsx` | Dev-only — wikkelt alleen `ResponsiveViewer`. Retourneert 404 in production. |
 | `/gallery/components` | `app/gallery/components/page.tsx` | Dev-only — standalone fixture-pagina (status indicators + session tiles). Geen nav, geschikt als iframe-target in de viewer. Retourneert 404 in production. |
+| `/processes` | `app/processes/page.tsx` | Overzicht van alle actieve Claude Code processen (pid, sessionId, cwd, memory RAM/paged, startedAt, version, entrypoint). Klikbaar via `MemoryUsageBadge` in de header. |
 
 Schermen + opties per route staan in `screens.md`.
 
