@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.0](https://github.com/cveld/claude-code-dashboard/compare/v0.4.0...v0.5.0) (2026-07-12)
+
+
+### Features
+
+* **processes:** add /processes overview page for active Claude processes ([b8aae78](https://github.com/cveld/claude-code-dashboard/commit/b8aae78d7fc8caf1bc2df3bdb4ad8142041f16d8))
+* **sessions:** estimate $ cost in the token breakdown tooltip ([0792e04](https://github.com/cveld/claude-code-dashboard/commit/0792e042afe448e7b7fddad76046574ebf52a124))
+* **sessions:** mobile-friendly session tile actions ([ea09e0a](https://github.com/cveld/claude-code-dashboard/commit/ea09e0a61f08e9dfdc4a2d498c4b80e8ea8bff35))
+* **sessions:** per-model token breakdown with pinnable copy tooltip ([240918c](https://github.com/cveld/claude-code-dashboard/commit/240918c59e4e3db196e4a88f6ed64d63421632aa))
+* **sessions:** show per-process RAM and paged memory usage ([5d715e7](https://github.com/cveld/claude-code-dashboard/commit/5d715e7dd886a3367e7a4ace559992bca7be2ae6))
+* **tray:** add Windows tray app for continuous token-usage visibility ([0b905ac](https://github.com/cveld/claude-code-dashboard/commit/0b905acf493cba1a1c812a47c9324a05b2c05cc8))
+* **tray:** show Claude session memory usage ([e408f87](https://github.com/cveld/claude-code-dashboard/commit/e408f8777b230a7b00fe6c1f9c30097f5a691b49))
+
+
+### Bug Fixes
+
+* **dashboard:** handle 404s gracefully and improve loading states ([0574af9](https://github.com/cveld/claude-code-dashboard/commit/0574af96d719027ecf35ea4ff083733ad3c8164a))
+
 ## [0.4.0](https://github.com/cveld/claude-code-dashboard/compare/v0.3.0...v0.4.0) (2026-07-05)
 
 
