@@ -51,7 +51,9 @@ export default function ProcessesPage() {
 
   const titleFromSession = (s: ActiveSession): string => {
     if (s.title && s.title.length > 0) return s.title;
-    if (s.name && s.name.length > 0) return s.name;
+    if (s.name && /^[A-Za-z][A-Za-z0-9 -]{7,}$/.test(s.name) && !/^[a-z0-9]+-[a-z0-9]+$/i.test(s.name)) {
+      return s.name;
+    }
     // Fallback: last segment of cwd, with path separators normalized
     const parts = s.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
     return parts[parts.length - 1] || s.cwd;

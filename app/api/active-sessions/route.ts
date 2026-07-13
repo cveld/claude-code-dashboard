@@ -72,8 +72,8 @@ function getMemoryUsage(pids: number[]): Promise<Map<number, MemoryUsage>> {
   });
 }
 
-// Look up a session's title from its transcript .jsonl file, reading only the
-// first 50 lines (the title is set early in the conversation).
+// Look up a session's title from its transcript .jsonl file.
+// Prefer a custom title when one exists, but fall back to the AI title.
 function findTranscriptTitle(sessionId: string, cwd: string): { title: string; source: string } | null {
   const slug = pathToSlug(cwd);
   if (!slug) return null;
@@ -81,17 +81,15 @@ function findTranscriptTitle(sessionId: string, cwd: string): { title: string; s
   const projectDir = path.join(os.homedir(), ".claude", "projects", slug);
   if (!fs.existsSync(projectDir)) return null;
 
-  // Session .jsonl files are named <sessionId>.jsonl — some may have a different
-  // naming convention, so we check a few patterns.
   const candidates = [
     path.join(projectDir, `${sessionId}.jsonl`),
   ];
 
-  // Also check for any .jsonl that contains this sessionId in the first line
+  // Also check for any .jsonl that contains this sessionId in the first line.
   try {
     const dirFiles = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
     for (const df of dirFiles) {
-      if (df === `${sessionId}.jsonl`) continue; // already checked
+      if (df === `${sessionId}.jsonl`) continue;
       try {
         const firstLine = readFirstLine(path.join(projectDir, df));
         if (firstLine && firstLine.includes(sessionId)) {
@@ -109,20 +107,25 @@ function findTranscriptTitle(sessionId: string, cwd: string): { title: string; s
     try {
       if (!fs.existsSync(filePath)) continue;
       const content = readFirstLines(filePath, 256 * 1024);
+      let aiTitle: string | null = null;
+      let customTitle: string | null = null;
+
       for (const line of content.split("\n")) {
         if (!line.trim()) continue;
         try {
           const obj = JSON.parse(line);
-          if (obj.type === "ai-title" && obj.aiTitle) {
-            return { title: obj.aiTitle, source: "ai-title" };
-          }
-          if (obj.type === "custom-title" && obj.customTitle) {
-            return { title: obj.customTitle, source: "custom-title" };
+          if (obj.type === "custom-title" && typeof obj.customTitle === "string" && obj.customTitle.length > 0) {
+            customTitle = obj.customTitle;
+          } else if (obj.type === "ai-title" && typeof obj.aiTitle === "string" && obj.aiTitle.length > 0) {
+            aiTitle = obj.aiTitle;
           }
         } catch {
           continue;
         }
       }
+
+      if (customTitle) return { title: customTitle, source: "custom-title" };
+      if (aiTitle) return { title: aiTitle, source: "ai-title" };
     } catch (e) {
       console.log(`[active-sessions]   error reading ${filePath}:`, e);
       continue;
