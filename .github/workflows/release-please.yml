@@ -36,7 +36,8 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
       # Trusted publishing needs npm >= 11.5.1; setup-node ships an older npm.
-      - run: npm install -g npm@latest
+      # Pinned to the npm 11 line (not "latest"): npm 12 dropped Node 20 support.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build
       # No NODE_AUTH_TOKEN: npm authenticates via OIDC against the trusted
