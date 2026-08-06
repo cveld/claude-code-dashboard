@@ -1,6 +1,6 @@
 {
   "name": "@cveld/claude-code-dashboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A local web dashboard for browsing Claude Code sessions, projects, and transcripts from ~/.claude/.",
   "keywords": [
     "claude",
