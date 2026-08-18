@@ -131,7 +131,6 @@ export default function ProcessesPage() {
                     const hasMem = s.memoryBytes != null;
                     const sessionTitle = titleFromSession(s);
                     const titleIsFallback = !s.title && !s.name;
-                    const sessionIdShort = s.sessionId.slice(0, 8);
                     return (
                       <tr
                         key={s.sessionId}
@@ -140,11 +139,11 @@ export default function ProcessesPage() {
                         <td className="px-3 py-2.5 font-mono text-zinc-500 text-xs">
                           {s.pid}
                         </td>
-                        <td className="px-3 py-2.5 min-w-[220px]">
+                        <td className="px-3 py-2.5 min-w-[320px]">
                           <div className="flex flex-col gap-0.5">
                             <Link
                               href={`/projects/${encodeURIComponent(s.projectSlug)}/sessions/${encodeURIComponent(s.sessionId)}?from=processes`}
-                              className={`truncate max-w-[220px] block text-xs font-medium hover:underline ${
+                              className={`truncate max-w-[300px] block text-xs font-medium hover:underline ${
                                 titleIsFallback ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-200 hover:text-white"
                               }`}
                               title={`Session: ${s.sessionId}`}
@@ -152,8 +151,8 @@ export default function ProcessesPage() {
                               {sessionTitle}
                             </Link>
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[10px] text-zinc-500 select-all" title={s.sessionId}>
-                                {sessionIdShort}…
+                              <span className="font-mono text-[10px] text-zinc-500 select-all whitespace-nowrap" title={s.sessionId}>
+                                {s.sessionId}
                               </span>
                               <button
                                 onClick={() => copyId(s.sessionId)}

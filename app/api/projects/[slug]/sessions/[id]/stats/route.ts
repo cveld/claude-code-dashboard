@@ -37,6 +37,10 @@ async function parseStats(filePath: string): Promise<SessionStats> {
     let totalTokensBurned = 0;
     let assistantTurns = 0;
     const perModel: Record<string, ModelTokenComponents> = {};
+    // Claude Code writes one JSONL line per content block (thinking, tool_use, text, ...)
+    // of an assistant message, and every line repeats that message's full usage totals.
+    // Dedupe by message.id so multi-block turns aren't counted more than once.
+    const seenMessageIds = new Set<string>();
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -45,6 +49,9 @@ async function parseStats(filePath: string): Promise<SessionStats> {
         if (obj.type === "assistant" && obj.message?.usage) {
           const u = obj.message.usage;
           if (u.input_tokens != null) currentContext = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+          const messageId = obj.message.id;
+          if (messageId && seenMessageIds.has(messageId)) return;
+          if (messageId) seenMessageIds.add(messageId);
           totalInputTokens += u.input_tokens ?? 0;
           totalOutputTokens += u.output_tokens ?? 0;
           totalCacheCreation += u.cache_creation_input_tokens ?? 0;

@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { spawn } from "child_process";
+import { loadCache, saveCache, peekJsonlCached } from "@/app/lib/peekJsonl";
 
 // Inline slug function — same logic as app/lib/dashboard.ts pathToSlug,
 // avoids cross-module import issues with Turbopack in API routes.
@@ -21,7 +22,6 @@ export interface ActiveSession {
   name?: string;
   nameSource?: string;
   title?: string;
-  titleSource?: string;
   memoryBytes?: number;
   pagedMemoryBytes?: number;
 }
@@ -73,17 +73,17 @@ function getMemoryUsage(pids: number[]): Promise<Map<number, MemoryUsage>> {
 }
 
 // Look up a session's title from its transcript .jsonl file.
-// Prefer a custom title when one exists, but fall back to the AI title.
-function findTranscriptTitle(sessionId: string, cwd: string): { title: string; source: string } | null {
+// Uses peekJsonlCached (streams the whole file, not just a leading chunk) so a
+// large early tool-result line can't push the title event out of range —
+// unlike a byte-capped read, which missed titles on transcripts with big lines.
+async function findTranscriptTitle(sessionId: string, cwd: string): Promise<string | null> {
   const slug = pathToSlug(cwd);
   if (!slug) return null;
 
   const projectDir = path.join(os.homedir(), ".claude", "projects", slug);
   if (!fs.existsSync(projectDir)) return null;
 
-  const candidates = [
-    path.join(projectDir, `${sessionId}.jsonl`),
-  ];
+  const candidates = [`${sessionId}.jsonl`];
 
   // Also check for any .jsonl that contains this sessionId in the first line.
   try {
@@ -93,7 +93,7 @@ function findTranscriptTitle(sessionId: string, cwd: string): { title: string; s
       try {
         const firstLine = readFirstLine(path.join(projectDir, df));
         if (firstLine && firstLine.includes(sessionId)) {
-          candidates.push(path.join(projectDir, df));
+          candidates.push(df);
         }
       } catch {
         // skip
@@ -103,33 +103,17 @@ function findTranscriptTitle(sessionId: string, cwd: string): { title: string; s
     // skip
   }
 
-  for (const filePath of candidates) {
-    try {
+  const cache = loadCache(projectDir);
+  try {
+    for (const filename of candidates) {
+      const filePath = path.join(projectDir, filename);
       if (!fs.existsSync(filePath)) continue;
-      const content = readFirstLines(filePath, 256 * 1024);
-      let aiTitle: string | null = null;
-      let customTitle: string | null = null;
-
-      for (const line of content.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          const obj = JSON.parse(line);
-          if (obj.type === "custom-title" && typeof obj.customTitle === "string" && obj.customTitle.length > 0) {
-            customTitle = obj.customTitle;
-          } else if (obj.type === "ai-title" && typeof obj.aiTitle === "string" && obj.aiTitle.length > 0) {
-            aiTitle = obj.aiTitle;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      if (customTitle) return { title: customTitle, source: "custom-title" };
-      if (aiTitle) return { title: aiTitle, source: "ai-title" };
-    } catch (e) {
-      console.log(`[active-sessions]   error reading ${filePath}:`, e);
-      continue;
+      const stat = fs.statSync(filePath);
+      const { title } = await peekJsonlCached(filePath, filename, stat.mtime, cache);
+      if (title) return title;
     }
+  } finally {
+    saveCache(projectDir, cache);
   }
 
   return null;
@@ -149,23 +133,6 @@ function readFirstLine(filePath: string): string | null {
     }
   } catch {
     return null;
-  }
-}
-
-// Read the first `maxBytes` of a file, returning full lines.
-// Useful for scanning transcript headers without loading the entire file.
-function readFirstLines(filePath: string, maxBytes: number): string {
-  try {
-    const fd = fs.openSync(filePath, "r");
-    try {
-      const buf = Buffer.alloc(maxBytes);
-      const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
-      return buf.toString("utf-8", 0, bytesRead);
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    return "";
   }
 }
 
@@ -192,11 +159,8 @@ export async function GET() {
   // Attach project slug and transcript titles.
   for (const s of active) {
     s.projectSlug = pathToSlug(s.cwd);
-    const titleInfo = findTranscriptTitle(s.sessionId, s.cwd);
-    if (titleInfo) {
-      s.title = titleInfo.title;
-      s.titleSource = titleInfo.source;
-    }
+    const title = await findTranscriptTitle(s.sessionId, s.cwd);
+    if (title) s.title = title;
   }
 
   const memory = await getMemoryUsage(active.map((s) => s.pid));
