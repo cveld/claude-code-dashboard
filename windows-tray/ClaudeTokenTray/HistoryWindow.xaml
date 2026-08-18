@@ -1,0 +1,188 @@
+<Window
+    x:Class="ClaudeTokenTray.HistoryWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Claude usage history">
+
+    <Grid>
+        <Grid.Resources>
+            <SolidColorBrush x:Key="RootBackgroundBrush" Color="#FF18181B" />
+            <SolidColorBrush x:Key="TitleBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="SubtleTextBrush" Color="#FFA1A1AA" />
+            <SolidColorBrush x:Key="PanelTitleBrush" Color="#FFD4D4D8" />
+        </Grid.Resources>
+
+        <Border Background="{StaticResource RootBackgroundBrush}">
+            <Grid Padding="16" RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Grid.Column="0"
+                        Text="Claude usage history"
+                        FontSize="18"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TitleBrush}"
+                        VerticalAlignment="Center" />
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+                        <Button x:Name="Btn6h" Content="6h" Click="PeriodButton_Click" MinWidth="52" />
+                        <Button x:Name="Btn24h" Content="24h" Click="PeriodButton_Click" MinWidth="52" />
+                        <Button x:Name="Btn7d" Content="7d" Click="PeriodButton_Click" MinWidth="52" />
+                        <Button x:Name="Btn30d" Content="30d" Click="PeriodButton_Click" MinWidth="52" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Token usage title + live counters (also doubles as the chart legend - each
+                     chip's dot is the same colour as its line, so a separate legend would just
+                     repeat the same 5h/7d/7d Sonnet labels a second time). -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Grid.Column="0"
+                        Text="Token usage"
+                        FontSize="13"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource PanelTitleBrush}"
+                        VerticalAlignment="Center" />
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="16"
+                        Margin="16,0,0,0"
+                        VerticalAlignment="Center">
+                        <StackPanel x:Name="LiveCountersPanel" Orientation="Horizontal" Spacing="16" />
+                        <TextBlock
+                            Text="┊ = window reset"
+                            FontSize="10"
+                            Foreground="{StaticResource SubtleTextBrush}"
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Readout -->
+                <TextBlock
+                    x:Name="ReadoutText"
+                    Grid.Row="2"
+                    Text="Hover a chart to inspect a point"
+                    FontSize="12"
+                    Foreground="{StaticResource SubtleTextBrush}" />
+
+                <!-- The three charts are the only part allowed to shrink/scroll when the window
+                     gets short - the header, live counters and (crucially) the time scrubber
+                     below all stay Auto-sized rows of the outer grid, so they're never the thing
+                     that gets pushed out of view. -->
+                <ScrollViewer
+                    Grid.Row="3"
+                    VerticalScrollMode="Auto"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollMode="Disabled">
+                    <Grid RowSpacing="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="160" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" MinHeight="100" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" MinHeight="100" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Quota chart -->
+                        <Grid Grid.Row="0">
+                            <Canvas x:Name="QuotaCanvas" Background="Transparent" />
+                            <Canvas x:Name="QuotaOverlay" IsHitTestVisible="False" />
+                        </Grid>
+
+                        <!-- Quota prediction -->
+                        <TextBlock
+                            x:Name="PredictionText"
+                            Grid.Row="1"
+                            FontSize="11"
+                            TextWrapping="Wrap"
+                            Foreground="{StaticResource SubtleTextBrush}" />
+
+                        <!-- Memory title -->
+                        <TextBlock
+                            Grid.Row="2"
+                            Text="Memory"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource PanelTitleBrush}" />
+
+                        <!-- Memory chart -->
+                        <Grid Grid.Row="3">
+                            <Canvas x:Name="MemoryCanvas" Background="Transparent" />
+                            <Canvas x:Name="MemoryOverlay" IsHitTestVisible="False" />
+                        </Grid>
+
+                        <!-- Sessions title -->
+                        <TextBlock
+                            Grid.Row="4"
+                            Text="Active sessions"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource PanelTitleBrush}" />
+
+                        <!-- Sessions chart -->
+                        <Grid Grid.Row="5">
+                            <Canvas x:Name="SessionsCanvas" Background="Transparent" />
+                            <Canvas x:Name="SessionsOverlay" IsHitTestVisible="False" />
+                        </Grid>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- Time scrubber: pans all three charts backward through history without
+                     changing the zoom level set by the period buttons above. Pinned as its own
+                     row of the outer grid (not inside the scroll area above) so it's always
+                     reachable regardless of window height. -->
+                <Grid Grid.Row="4" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Custom-drawn instead of a Slider: a draggable bar whose width mirrors how
+                         much of the scrollable range the charts above are currently showing,
+                         over a blue/grey minimap of where samples actually exist. -->
+                    <Canvas
+                        x:Name="TimeScrubberCanvas"
+                        Grid.Column="0"
+                        Height="20"
+                        Background="Transparent"
+                        VerticalAlignment="Center" />
+
+                    <Button
+                        x:Name="NowButton"
+                        Grid.Column="1"
+                        Content="Jump to now"
+                        Click="NowButton_Click"
+                        IsEnabled="False" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

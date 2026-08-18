@@ -37,7 +37,13 @@ public sealed class TrayIconService : IDisposable
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr handle);
 
+    // 30 days of 5-minute samples is ~1 MB of JSON Lines - generous enough to spot a slow leak
+    // over weeks without the history file growing without bound.
+    private static readonly TimeSpan HistoryRetention = TimeSpan.FromDays(30);
+
     private readonly TaskbarIcon _trayIcon;
+    private readonly Action _showHistoryWindow;
+    private readonly XamlUICommand _showHistoryCommand;
     private readonly XamlUICommand _refreshCommand;
     private readonly XamlUICommand _iconStyleNumberCommand;
     private readonly XamlUICommand _iconStyleBarsCommand;
@@ -52,18 +58,21 @@ public sealed class TrayIconService : IDisposable
     private DisplayState _state = DisplayState.Loading;
     private bool _stale;
 
-    public TrayIconService(TaskbarIcon trayIcon)
+    public TrayIconService(TaskbarIcon trayIcon, Action showHistoryWindow)
     {
         _trayIcon = trayIcon;
+        _showHistoryWindow = showHistoryWindow;
         _iconStyle = LoadIconStyle();
 
         var resources = Application.Current.Resources;
+        _showHistoryCommand = (XamlUICommand)resources["ShowHistoryCommand"];
         _refreshCommand = (XamlUICommand)resources["RefreshCommand"];
         _iconStyleNumberCommand = (XamlUICommand)resources["IconStyleNumberCommand"];
         _iconStyleBarsCommand = (XamlUICommand)resources["IconStyleBarsCommand"];
         _startWithWindowsCommand = (XamlUICommand)resources["StartWithWindowsCommand"];
         _exitCommand = (XamlUICommand)resources["ExitCommand"];
 
+        _showHistoryCommand.ExecuteRequested += (_, _) => _showHistoryWindow();
         _refreshCommand.ExecuteRequested += (_, _) => _ = RefreshAsync();
         _iconStyleNumberCommand.ExecuteRequested += (_, _) => SetIconStyle(IconStyle.Number);
         _iconStyleBarsCommand.ExecuteRequested += (_, _) => SetIconStyle(IconStyle.Bars);
@@ -81,6 +90,7 @@ public sealed class TrayIconService : IDisposable
         _timer.Tick += (_, _) => _ = RefreshAsync();
         _timer.Start();
 
+        _ = Task.Run(() => UsageHistoryStore.Prune(HistoryRetention));
         _ = RefreshAsync();
     }
 
@@ -95,11 +105,12 @@ public sealed class TrayIconService : IDisposable
             // leave previous memory reading in place
         }
 
+        TokenUsage? freshUsage = null;
         try
         {
-            var usage = await TokenUsageClient.GetUsageAsync().ConfigureAwait(true);
-            _lastGood = usage;
-            ApplyUsage(usage, stale: false);
+            freshUsage = await TokenUsageClient.GetUsageAsync().ConfigureAwait(true);
+            _lastGood = freshUsage;
+            ApplyUsage(freshUsage, stale: false);
         }
         catch (TokenUsageException ex) when (ex.Message == "no_credentials")
         {
@@ -112,6 +123,21 @@ public sealed class TrayIconService : IDisposable
             else
                 ApplyError();
         }
+
+        // Record this poll for the history charts. A failed usage fetch is recorded as an
+        // unknown reading (null) rather than replaying the stale value, so an outage shows as a
+        // gap instead of a fabricated flat line; the memory reading is independent of it.
+        UsageHistoryStore.Append(new UsageSample(
+            DateTimeOffset.Now,
+            freshUsage?.FiveHour?.Utilization,
+            freshUsage?.SevenDay?.Utilization,
+            freshUsage?.SevenDaySonnet?.Utilization,
+            _memoryUsage?.TotalMemoryBytes,
+            _memoryUsage?.TotalPagedMemoryBytes,
+            _memoryUsage?.SessionCount,
+            freshUsage?.FiveHour?.ResetsAt,
+            freshUsage?.SevenDay?.ResetsAt,
+            freshUsage?.SevenDaySonnet?.ResetsAt));
     }
 
     private void ApplyUsage(TokenUsage usage, bool stale)

@@ -96,3 +96,36 @@ Add the following to `~/.claude/settings.json` to forward stop and notification 
   }
 }
 ```
+
+## Windows tray app
+
+Optional companion app: `windows-tray/ClaudeTokenTray`, a standalone .NET / WinUI 3 project. It
+lives alongside the Next.js app, is not published or referenced by it, and runs independently of
+`npm run dev`.
+
+It shows Claude usage-quota utilization (5h, 7d, 7d Sonnet) continuously in the Windows system
+tray. It reads the OAuth token from `~/.claude/.credentials.json` and polls the Anthropic usage
+endpoint every 5 minutes; "Refresh now" in the context menu forces a poll. Hovering the icon
+shows a tooltip with one bar per usage window — percentage and reset time — plus RAM and paged
+memory for the active Claude Code sessions.
+
+Two icon styles are switchable from the right-click menu: **Number** (colored circle with the 5h
+percentage) and **Bars** (two vertical meters, 5h and 7d). The choice is persisted in the
+registry. The menu also has a "Start with Windows" toggle.
+
+Build and run on Windows with the .NET SDK installed:
+
+```bash
+cd windows-tray/ClaudeTokenTray
+dotnet build
+dotnet run   # launches straight to the tray, no window
+```
+
+If a previous instance is still running in the tray — including one auto-started by "Start with
+Windows" — the build fails with `MSB3027` because `ClaudeTokenTray.exe` is locked. Stop it first:
+
+```powershell
+Get-Process ClaudeTokenTray | Stop-Process -Force
+```
+
+See [docs/windows-tray.md](docs/windows-tray.md) for structure and implementation details.
