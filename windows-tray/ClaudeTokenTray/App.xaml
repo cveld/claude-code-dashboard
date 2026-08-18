@@ -12,6 +12,7 @@
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
 
+            <XamlUICommand x:Key="ShowHistoryCommand" Label="Show history..." />
             <XamlUICommand x:Key="RefreshCommand" Label="Refresh now" />
             <XamlUICommand x:Key="IconStyleNumberCommand" Label="Icon: Number" />
             <XamlUICommand x:Key="IconStyleBarsCommand" Label="Icon: Bars" />
@@ -21,9 +22,12 @@
             <tb:TaskbarIcon
                 x:Key="TrayIcon"
                 ToolTipText="Claude token usage"
-                NoLeftClickDelay="True">
+                NoLeftClickDelay="True"
+                LeftClickCommand="{StaticResource ShowHistoryCommand}">
                 <tb:TaskbarIcon.ContextFlyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem Command="{StaticResource ShowHistoryCommand}" />
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Command="{StaticResource RefreshCommand}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Command="{StaticResource IconStyleNumberCommand}" />

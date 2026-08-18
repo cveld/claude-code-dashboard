@@ -30,10 +30,13 @@ export type TokenBreakdown = TokenComponents & {
   perModel: Record<string, TokenComponents>;
 };
 
-type CacheEntry = PeekResult & { mtime: string };
+type CacheEntry = PeekResult & { mtime: string; schemaVersion?: number };
 type PeekCache = Record<string, CacheEntry>;
 
 const CACHE_FILE = ".peek-cache.json";
+// Bump when peekJsonlRaw's aggregation logic changes so stale cache entries
+// (e.g. computed before the message.id dedupe fix) are recomputed instead of reused.
+const SCHEMA_VERSION = 2;
 
 export function loadCache(projectDir: string): PeekCache {
   try {
@@ -66,6 +69,10 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
     let burnedCacheRead = 0;
     let burnedOutput = 0;
     const perModel: Record<string, TokenComponents> = {};
+    // Claude Code writes one JSONL line per content block (thinking, tool_use, text, ...)
+    // of an assistant message, and every line repeats that message's full usage totals.
+    // Dedupe by message.id so multi-block turns aren't counted more than once.
+    const seenMessageIds = new Set<string>();
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
@@ -91,16 +98,20 @@ async function peekJsonlRaw(filePath: string): Promise<PeekResult> {
               + (u.cache_creation_input_tokens ?? 0)
               + (u.cache_read_input_tokens ?? 0);
           }
-          burnedInput += u.input_tokens ?? 0;
-          burnedCacheCreation += u.cache_creation_input_tokens ?? 0;
-          burnedCacheRead += u.cache_read_input_tokens ?? 0;
-          burnedOutput += u.output_tokens ?? 0;
-          const model = obj.message.model ?? "unknown";
-          const m = (perModel[model] ??= { input: 0, cacheCreation: 0, cacheRead: 0, output: 0 });
-          m.input += u.input_tokens ?? 0;
-          m.cacheCreation += u.cache_creation_input_tokens ?? 0;
-          m.cacheRead += u.cache_read_input_tokens ?? 0;
-          m.output += u.output_tokens ?? 0;
+          const messageId = obj.message.id;
+          if (!messageId || !seenMessageIds.has(messageId)) {
+            if (messageId) seenMessageIds.add(messageId);
+            burnedInput += u.input_tokens ?? 0;
+            burnedCacheCreation += u.cache_creation_input_tokens ?? 0;
+            burnedCacheRead += u.cache_read_input_tokens ?? 0;
+            burnedOutput += u.output_tokens ?? 0;
+            const model = obj.message.model ?? "unknown";
+            const m = (perModel[model] ??= { input: 0, cacheCreation: 0, cacheRead: 0, output: 0 });
+            m.input += u.input_tokens ?? 0;
+            m.cacheCreation += u.cache_creation_input_tokens ?? 0;
+            m.cacheRead += u.cache_read_input_tokens ?? 0;
+            m.output += u.output_tokens ?? 0;
+          }
         }
         if ((obj.type === "user" || obj.type === "assistant") && obj.timestamp) {
           lastMessageAt = obj.timestamp;
@@ -138,12 +149,13 @@ export async function peekJsonlCached(
   const mtimeStr = mtime.toISOString();
   const entry = cache[filename];
   // Recompute when the field is missing so cache entries written before
-  // the per-model breakdown existed get backfilled on next read.
-  if (entry && entry.mtime === mtimeStr && entry.tokenBreakdown?.perModel != null) {
-    const { mtime: _m, ...result } = entry;
+  // the per-model breakdown existed get backfilled on next read, and when the
+  // schema version is stale so older aggregation bugs don't linger in the cache.
+  if (entry && entry.mtime === mtimeStr && entry.tokenBreakdown?.perModel != null && entry.schemaVersion === SCHEMA_VERSION) {
+    const { mtime: _m, schemaVersion: _s, ...result } = entry;
     return result;
   }
   const result = await peekJsonlRaw(filePath);
-  cache[filename] = { ...result, mtime: mtimeStr };
+  cache[filename] = { ...result, mtime: mtimeStr, schemaVersion: SCHEMA_VERSION };
   return result;
 }
