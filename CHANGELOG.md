@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/cveld/claude-code-dashboard/compare/v0.5.0...v0.6.0) (2026-08-18)
+
+
+### Features
+
+* **scripts:** add slidedeck.mjs to capture a navigable page overview ([260380d](https://github.com/cveld/claude-code-dashboard/commit/260380dc2072a44cd802eed0498cf2fc40436f64))
+* **tray:** add usage history window with charts and prediction ([3a11ad3](https://github.com/cveld/claude-code-dashboard/commit/3a11ad324b0e64e8bc3d2c756d5275656592f7be))
+
+
+### Bug Fixes
+
+* **processes:** dedupe token counts and use cached title lookup ([4be896f](https://github.com/cveld/claude-code-dashboard/commit/4be896f7f91cf0fbc54ad53498d4aa1f94b1a12f))
+
 ## [0.5.0](https://github.com/cveld/claude-code-dashboard/compare/v0.4.0...v0.5.0) (2026-07-12)
 
 
