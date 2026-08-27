@@ -13,6 +13,12 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    // The launcher scripts in bin/ are plain CommonJS Node scripts on purpose: they run before
+    // (and without) the bundler, and the package has no "type": "module".
+    files: ["bin/**/*.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ]);
 
 export default eslintConfig;

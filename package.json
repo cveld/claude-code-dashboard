@@ -33,14 +33,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:plain": "next dev",
     "build": "next build",
     "start": "next start",
     "prepack": "node scripts/clean-package.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "screenshot": "node scripts/screenshot.mjs"
+    "screenshot": "node scripts/screenshot.mjs",
+    "tray": "dotnet run --project windows-tray/ClaudeTokenTray"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

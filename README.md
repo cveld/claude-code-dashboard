@@ -13,12 +13,49 @@ npx @cveld/claude-code-dashboard -p 4000  # custom port
 
 It reads from your local `~/.claude/` directory. Open the printed URL in your browser.
 
+### Optional: register with a local Caddy server
+
+If you run [Caddy](https://caddyserver.com/) locally with its admin API enabled, the CLI can pick
+a free port and register a route for you. Registering mutates a Caddy config this package does
+not own, so for `npx` it is opt-in and never required to run the dashboard:
+
+```bash
+npx @cveld/claude-code-dashboard --caddy   # http://claude-code-dashboard.localhost
+```
+
+The route is removed again when the process exits. Configure it with flags or environment
+variables (flags win when both are set):
+
+| Flag | Env var | Default |
+|---|---|---|
+| `--caddy` / `--no-caddy` | `CLAUDE_DASHBOARD_CADDY=1` / `=0` | off for `npx`, on for `npm run dev` |
+| `--caddy-host=<host>` | `CLAUDE_DASHBOARD_CADDY_HOST` | `claude-code-dashboard.localhost` |
+| `--caddy-admin=<url>` | `CLAUDE_DASHBOARD_CADDY_ADMIN` | `http://127.0.0.1:2019` |
+| `--caddy-dial-host=<host>` | `CLAUDE_DASHBOARD_CADDY_DIAL_HOST` | auto-detected |
+| — | `CADDY_SERVER_NAME` | first server found in Caddy's config |
+
+If Caddy isn't running or the admin API is unreachable, the launcher says so in one line and
+starts the dashboard normally — Caddy is never a requirement.
+
+The upstream host is auto-detected. When Caddy itself runs in Docker, `127.0.0.1` resolves
+inside the container rather than on your host and the route answers `502`; the launcher notices
+that on its first request through Caddy and re-points the route at `host.docker.internal`.
+Setting `--caddy-dial-host=<host>` explicitly turns the detection off.
+
 ## Development
 
 ```bash
 npm install
-npm run dev   # http://localhost:3000
+npm run dev         # http://localhost:3000 + http://claude-code-dashboard.localhost
+npm run dev:plain   # bare `next dev`, no Caddy
 ```
+
+`npm run dev` registers the Caddy route on your behalf and drops it again on exit. It pins the
+port (3000 when free, otherwise a free one) so the route can never point at a port Next didn't
+get. Opt out with `npm run dev -- --no-caddy` or `CLAUDE_DASHBOARD_CADDY=0`.
+
+Any hostname the dev server is reached under must also be listed in `allowedDevOrigins` in
+`next.config.ts`, otherwise Next blocks the dev-only asset requests.
 
 ## Releasing
 
@@ -116,6 +153,9 @@ registry. The menu also has a "Start with Windows" toggle.
 Build and run on Windows with the .NET SDK installed:
 
 ```bash
+npm run tray   # dotnet run --project windows-tray/ClaudeTokenTray
+
+# or directly:
 cd windows-tray/ClaudeTokenTray
 dotnet build
 dotnet run   # launches straight to the tray, no window
