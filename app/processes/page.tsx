@@ -26,6 +26,12 @@ function fmtUptime(startedAt: number): string {
 export default function ProcessesPage() {
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [strayCount, setStrayCount] = useState(0);
+  const [sessionsExpanded, setSessionsExpanded] = useState(true);
+
+  const scrollToStray = useCallback(() => {
+    document.getElementById("stray-git-helpers")?.scrollIntoView({ behavior: "smooth" });
+  }, []);
 
   const fetchData = useCallback(() => {
     fetch("/api/active-sessions")
@@ -74,11 +80,19 @@ export default function ProcessesPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between w-full gap-3">
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 shrink-0">
-                  Active Processes
+                  Active Claude Code processes
                   {sessions !== null && (
                     <span className="ml-2 normal-case font-normal text-zinc-400">
                       {sessions.length} process{sessions.length === 1 ? "" : "es"}
                     </span>
+                  )}
+                  {strayCount > 0 && (
+                    <button
+                      onClick={scrollToStray}
+                      className="ml-2 normal-case font-normal text-rose-400 hover:underline"
+                    >
+                      {strayCount} stray git helper{strayCount === 1 ? "" : "s"}
+                    </button>
                   )}
                 </h2>
               </div>
@@ -95,28 +109,39 @@ export default function ProcessesPage() {
           <p className="text-zinc-500 text-sm">No active Claude Code processes found.</p>
         ) : (
           <>
-            {/* Summary bar */}
-            {withMemory.length > 0 && (
-              <div className="flex items-center gap-4 mb-4 px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-800 text-sm">
-                <span className="text-zinc-400">
-                  <span className="text-zinc-200 font-semibold">{withMemory.length}</span> process{withMemory.length === 1 ? "" : "es"} with memory data
-                </span>
-                <span className="text-zinc-600">·</span>
-                <span className="text-zinc-400">
-                  Total RAM: <span className="text-emerald-400 font-semibold">{fmtBytes(totalRam)}</span>
-                </span>
-                <span className="text-zinc-600">·</span>
-                <span className="text-zinc-400">
-                  Total paged: <span className="text-amber-400 font-semibold">{fmtBytes(totalPaged)}</span>
-                </span>
-              </div>
-            )}
-
             {/* Process table */}
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">
-              Claude Code sessions
-            </h2>
-            <div className="overflow-x-auto">
+            <button
+              onClick={() => setSessionsExpanded((v) => !v)}
+              className="flex items-center gap-2 mb-2"
+              aria-expanded={sessionsExpanded}
+            >
+              <span className="text-zinc-500 text-xs">{sessionsExpanded ? "▾" : "▸"}</span>
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                Claude Code processes
+              </h2>
+              <span className="text-xs text-zinc-600">({sessions.length})</span>
+            </button>
+
+            {sessionsExpanded && (
+              <>
+                {/* Summary bar */}
+                {withMemory.length > 0 && (
+                  <div className="flex items-center gap-4 mb-4 px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-800 text-sm">
+                    <span className="text-zinc-400">
+                      <span className="text-zinc-200 font-semibold">{withMemory.length}</span> process{withMemory.length === 1 ? "" : "es"} with memory data
+                    </span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-zinc-400">
+                      Total RAM: <span className="text-emerald-400 font-semibold">{fmtBytes(totalRam)}</span>
+                    </span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-zinc-400">
+                      Total paged: <span className="text-amber-400 font-semibold">{fmtBytes(totalPaged)}</span>
+                    </span>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-zinc-500 uppercase tracking-wider">
@@ -201,11 +226,13 @@ export default function ProcessesPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+                </div>
+              </>
+            )}
           </>
         )}
 
-        <StrayProcesses />
+        <StrayProcesses onCountChange={setStrayCount} />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ActiveSession } from "@/app/api/active-sessions/route";
+import type { StrayProcessesResponse } from "@/app/lib/strayProcesses";
 
 // RAM footprint changes slowly and each poll spawns a PowerShell process on
 // the server, so this polls far less often than the SSE-driven session data.
@@ -15,6 +16,7 @@ function fmtBytes(n: number): string {
 
 export function MemoryUsageBadge() {
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
+  const [strayCount, setStrayCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,6 +26,12 @@ export function MemoryUsageBadge() {
         .then((r) => r.json())
         .then((data: ActiveSession[]) => {
           if (!cancelled) setSessions(data);
+        })
+        .catch(() => {});
+      fetch("/api/stray-processes")
+        .then((r) => r.json())
+        .then((data: StrayProcessesResponse) => {
+          if (!cancelled) setStrayCount(data.supported ? data.chains.length : 0);
         })
         .catch(() => {});
     }
@@ -39,7 +47,7 @@ export function MemoryUsageBadge() {
   if (!sessions) return null;
   const withMemory = sessions.filter((s) => s.memoryBytes != null);
   const totalActive = sessions.length;
-  if (totalActive === 0) return null;
+  if (totalActive === 0 && strayCount === 0) return null;
 
   const total = withMemory.reduce((sum, s) => sum + (s.memoryBytes ?? 0), 0);
   const totalPaged = withMemory.reduce((sum, s) => sum + (s.pagedMemoryBytes ?? 0), 0);
@@ -54,9 +62,19 @@ export function MemoryUsageBadge() {
     : `${totalActive} active process${totalActive === 1 ? "" : "es"} — no memory data available`;
 
   return (
-    <Link href="/processes" className="flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums hover:text-zinc-300 transition-colors" title={tooltip}>
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-      {totalActive} session{totalActive === 1 ? "" : "s"}{withMemory.length > 0 ? ` · ${fmtBytes(total)} RAM · ${fmtBytes(totalPaged)} paged` : ""}
-    </Link>
+    <span className="flex items-center gap-3">
+      {totalActive > 0 && (
+        <Link href="/processes" className="flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums hover:text-zinc-300 transition-colors" title={tooltip}>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+          {totalActive} process{totalActive === 1 ? "" : "es"}{withMemory.length > 0 ? ` · ${fmtBytes(total)} RAM · ${fmtBytes(totalPaged)} paged` : ""}
+        </Link>
+      )}
+      {strayCount > 0 && (
+        <Link href="/processes#stray-git-helpers" className="flex items-center gap-1.5 text-xs text-rose-400 tabular-nums hover:text-rose-300 transition-colors" title="Stray git/GCM process trees">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+          {strayCount} stray git helper{strayCount === 1 ? "" : "s"}
+        </Link>
+      )}
+    </span>
   );
 }

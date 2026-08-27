@@ -37,17 +37,26 @@ function shortCommand(commandLine: string): string {
   return stripped.length > 110 ? `${stripped.slice(0, 110)}…` : stripped;
 }
 
-export function StrayProcesses() {
+interface StrayProcessesProps {
+  /** Called whenever the chain count changes, so a page header can show a summary badge. */
+  onCountChange?: (count: number) => void;
+}
+
+export function StrayProcesses({ onCountChange }: StrayProcessesProps = {}) {
   const [data, setData] = useState<StrayProcessesResponse | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<number | "all" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sectionExpanded, setSectionExpanded] = useState(true);
 
   const fetchData = useCallback(() => {
-    fetch("/api/stray-processes")
+    setRefreshing(true);
+    return fetch("/api/stray-processes")
       .then((r) => r.json())
       .then((d: StrayProcessesResponse) => setData(d))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
   }, []);
 
   useEffect(() => {
@@ -55,6 +64,10 @@ export function StrayProcesses() {
     const interval = setInterval(fetchData, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  useEffect(() => {
+    onCountChange?.(data?.supported ? data.chains.length : 0);
+  }, [data, onCountChange]);
 
   const toggle = useCallback((rootPid: number) => {
     setExpanded((prev) => {
@@ -94,36 +107,80 @@ export function StrayProcesses() {
     [fetchData]
   );
 
-  // Nothing stranded (or not Windows) — stay out of the way entirely.
-  if (!data || !data.supported || data.chains.length === 0) {
+  // Not Windows, or the first fetch hasn't landed yet — stay out of the way entirely.
+  if (!data || !data.supported) {
     return notice ? <p className="mt-8 text-xs text-zinc-400">{notice}</p> : null;
+  }
+
+  const refreshButton = (
+    <button
+      onClick={fetchData}
+      disabled={refreshing}
+      className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 disabled:opacity-50 transition-colors"
+    >
+      {refreshing ? "Refreshing…" : "Refresh"}
+    </button>
+  );
+
+  // Nothing stranded right now — a compact line with a manual refresh, so a
+  // batch that started after the last poll doesn't need up to 2 minutes to show up.
+  if (data.chains.length === 0) {
+    return (
+      <section id="stray-git-helpers" className="mt-8 scroll-mt-20">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSectionExpanded((v) => !v)}
+            className="flex items-center gap-2"
+            aria-expanded={sectionExpanded}
+          >
+            <span className="text-zinc-500 text-xs">{sectionExpanded ? "▾" : "▸"}</span>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Stray git helpers
+            </h2>
+          </button>
+          <span className="text-sm text-zinc-500">none</span>
+          <div className="ml-auto">{refreshButton}</div>
+        </div>
+        {sectionExpanded && notice && <p className="mt-3 text-xs text-zinc-300">{notice}</p>}
+      </section>
+    );
   }
 
   const blocking = data.chains.filter((c) => c.reasons.includes("waiting-for-credentials")).length;
   const allPids = data.chains.flatMap((c) => c.processes.map((p) => p.pid));
 
   return (
-    <section className="mt-8">
+    <section id="stray-git-helpers" className="mt-8 scroll-mt-20">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          Stray git helpers
-        </h2>
+        <button
+          onClick={() => setSectionExpanded((v) => !v)}
+          className="flex items-center gap-2"
+          aria-expanded={sectionExpanded}
+        >
+          <span className="text-zinc-500 text-xs">{sectionExpanded ? "▾" : "▸"}</span>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+            Stray git helpers
+          </h2>
+        </button>
         <span className={`text-sm ${blocking > 0 ? "text-rose-400" : "text-amber-400"}`}>
           {data.totalProcesses} process{data.totalProcesses === 1 ? "" : "es"} in {data.chains.length} chain
           {data.chains.length === 1 ? "" : "s"}
         </span>
         <span className="text-zinc-600">·</span>
         <span className="text-sm text-zinc-400">oldest {fmtAge(data.oldestAgeMs)}</span>
-        <button
-          onClick={() => kill("all", allPids, "all chains")}
-          disabled={pending !== null}
-          className="ml-auto text-xs px-2 py-1 rounded border border-rose-900 bg-rose-950/40 text-rose-300 hover:bg-rose-900/50 disabled:opacity-50 transition-colors"
-        >
-          {pending === "all" ? "Killing…" : `Kill all (${data.totalProcesses})`}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {refreshButton}
+          <button
+            onClick={() => kill("all", allPids, "all chains")}
+            disabled={pending !== null}
+            className="text-xs px-2 py-1 rounded border border-rose-900 bg-rose-950/40 text-rose-300 hover:bg-rose-900/50 disabled:opacity-50 transition-colors"
+          >
+            {pending === "all" ? "Killing…" : `Kill all (${data.totalProcesses})`}
+          </button>
+        </div>
       </div>
 
-      {blocking > 0 && (
+      {sectionExpanded && blocking > 0 && (
         <p className="mb-3 text-xs text-zinc-400 leading-relaxed">
           {blocking} chain{blocking === 1 ? "" : "s"} deadlocked on a credential prompt. These hold locks on their
           working directory, which breaks <span className="font-mono text-zinc-300">git worktree move</span> and folder
@@ -133,8 +190,9 @@ export function StrayProcesses() {
         </p>
       )}
 
-      {notice && <p className="mb-3 text-xs text-zinc-300">{notice}</p>}
+      {sectionExpanded && notice && <p className="mb-3 text-xs text-zinc-300">{notice}</p>}
 
+      {sectionExpanded && (
       <div className="flex flex-col gap-2">
         {data.chains.map((chain: StrayChain) => {
           const isOpen = expanded.has(chain.rootPid);
@@ -209,6 +267,7 @@ export function StrayProcesses() {
           );
         })}
       </div>
+      )}
     </section>
   );
 }
