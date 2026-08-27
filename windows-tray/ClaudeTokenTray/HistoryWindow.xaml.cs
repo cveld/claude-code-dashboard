@@ -25,6 +25,8 @@ public sealed partial class HistoryWindow : Window
     private const string IdleReadout = "Hover a chart to inspect a point";
     private const string WidthSetting = "HistoryWindowWidth";
     private const string HeightSetting = "HistoryWindowHeight";
+    private const string XSetting = "HistoryWindowX";
+    private const string YSetting = "HistoryWindowY";
 
     // A first-ever launch (no saved size yet) opens generously large rather than at the content's
     // bare minimum - the three chart panels read as cramped when the window sits right at its floor.
@@ -40,6 +42,11 @@ public sealed partial class HistoryWindow : Window
     // stretched to cover the furthest upcoming window reset - that's what gives a live
     // prediction room to actually draw forward instead of being squashed against "now".
     private DateTimeOffset _viewTo;
+
+    // The quota chart's own prediction dashed-lines, in pixel space - refreshed on every Redraw()
+    // and reused by the pointer-hover readout so hovering over a projection shows what it's
+    // actually projecting instead of falling back to the last real (and by then stale) sample.
+    private IReadOnlyList<UsageChartRenderer.PredictionMarker> _predictionMarkers = [];
 
     private IReadOnlyList<UsageSample> _samples = [];
 
@@ -65,6 +72,8 @@ public sealed partial class HistoryWindow : Window
 
         AppWindow.SetIcon(Win32Interop.GetIconIdFromIcon(_windowIcon.Handle));
         AppWindow.Resize(LoadSavedSize());
+        if (LoadSavedPosition() is Windows.Graphics.PointInt32 position)
+            AppWindow.Move(position);
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.PreferredMinimumWidth = MinWidth;
@@ -130,15 +139,21 @@ public sealed partial class HistoryWindow : Window
         AppWindow.Hide();
     }
 
-    // Persists whatever size the user leaves the window at, so a resize sticks across app
-    // restarts instead of reverting to a guessed default every time.
+    // Persists whatever size/position the user leaves the window at, so a resize or move sticks
+    // across app restarts instead of reverting to a guessed default every time.
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if (!args.DidSizeChange)
-            return;
+        if (args.DidSizeChange)
+        {
+            TraySettings.Write(WidthSetting, sender.Size.Width.ToString(CultureInfo.InvariantCulture));
+            TraySettings.Write(HeightSetting, sender.Size.Height.ToString(CultureInfo.InvariantCulture));
+        }
 
-        TraySettings.Write(WidthSetting, sender.Size.Width.ToString(CultureInfo.InvariantCulture));
-        TraySettings.Write(HeightSetting, sender.Size.Height.ToString(CultureInfo.InvariantCulture));
+        if (args.DidPositionChange)
+        {
+            TraySettings.Write(XSetting, sender.Position.X.ToString(CultureInfo.InvariantCulture));
+            TraySettings.Write(YSetting, sender.Position.Y.ToString(CultureInfo.InvariantCulture));
+        }
     }
 
     private static Windows.Graphics.SizeInt32 LoadSavedSize()
@@ -151,6 +166,37 @@ public sealed partial class HistoryWindow : Window
         }
 
         return DefaultSize;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+
+    // A saved position from a monitor that's since been unplugged or reconfigured would otherwise
+    // place the window off every currently visible screen, with no obvious way to drag it back -
+    // so a saved position outside the current virtual desktop is treated as absent and the OS
+    // picks a default placement instead, same as a first-ever launch.
+    private static Windows.Graphics.PointInt32? LoadSavedPosition()
+    {
+        if (!int.TryParse(TraySettings.Read(XSetting), NumberStyles.Integer, CultureInfo.InvariantCulture, out var x) ||
+            !int.TryParse(TraySettings.Read(YSetting), NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
+            return null;
+
+        var virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        var virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        var virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        var virtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+        const int minVisible = 40;
+        if (x < virtualLeft || x > virtualLeft + virtualWidth - minVisible ||
+            y < virtualTop || y > virtualTop + virtualHeight - minVisible)
+            return null;
+
+        return new Windows.Graphics.PointInt32(x, y);
     }
 
     private void InitializeStyles()
@@ -272,7 +318,7 @@ public sealed partial class HistoryWindow : Window
         _viewTo = _pinnedTo is null ? ComputeLiveViewTo(_to) : _to;
 
         var predictAsOf = _pinnedTo is null ? now : (DateTimeOffset?)null;
-        var predictions = UsageChartRenderer.DrawQuota(QuotaCanvas, _samples, _from, _to, _viewTo, predictAsOf);
+        var predictions = UsageChartRenderer.DrawQuota(QuotaCanvas, _samples, _from, _to, _viewTo, predictAsOf, _selectedPeriod, out _predictionMarkers);
         UsageChartRenderer.DrawMemory(MemoryCanvas, _samples, _from, _to, _viewTo);
         UsageChartRenderer.DrawSessions(SessionsCanvas, _samples, _from, _to, _viewTo);
 
@@ -344,20 +390,44 @@ public sealed partial class HistoryWindow : Window
         AddCounterChip(LiveCountersPanel, "7d", latest.SevenDay, latest.SevenDayResetsAt, UsageChartRenderer.SevenDayColor);
         AddCounterChip(LiveCountersPanel, "7d Sonnet", latest.SevenDaySonnet, latest.SevenDaySonnetResetsAt, UsageChartRenderer.SevenDaySonnetColor);
 
-        if (latest.MemoryBytes is long memoryBytes)
+        if (latest.SessionCount is int sessions)
         {
-            var text = latest.SessionCount is int sessions
-                ? $"{UsageFormat.Sessions(sessions)} · {UsageFormat.Bytes(memoryBytes)} RAM"
-                : $"{UsageFormat.Bytes(memoryBytes)} RAM";
-
             LiveCountersPanel.Children.Add(new TextBlock
             {
-                Text = text,
+                Text = UsageFormat.Sessions(sessions),
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromArgb(255, 0xA1, 0xA1, 0xAA)),
                 VerticalAlignment = VerticalAlignment.Center,
             });
         }
+
+        if (latest.MemoryBytes is long memoryBytes)
+            AddMemoryChip(LiveCountersPanel, "RAM", UsageFormat.Bytes(memoryBytes), UsageChartRenderer.MemoryColor);
+        if (latest.PagedMemoryBytes is long pagedBytes)
+            AddMemoryChip(LiveCountersPanel, "paged", UsageFormat.Bytes(pagedBytes), UsageChartRenderer.PagedMemoryColor);
+    }
+
+    // Mirrors AddCounterChip's dot+text shape so RAM/paged read as legend entries for the Memory
+    // chart's two coloured series, the same way the 5h/7d/7d-Sonnet chips do for the quota chart.
+    private static void AddMemoryChip(StackPanel panel, string label, string valueText, Color color)
+    {
+        var chip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        chip.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = new SolidColorBrush(color),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        chip.Children.Add(new TextBlock
+        {
+            Text = $"{valueText} {label}",
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(color),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        panel.Children.Add(chip);
     }
 
     private static void AddCounterChip(StackPanel panel, string label, double? value, DateTimeOffset? resetsAt, Color seriesColor)
@@ -704,8 +774,35 @@ public sealed partial class HistoryWindow : Window
         UsageChartRenderer.DrawCrosshair(MemoryOverlay, _samples, _from, _to, _viewTo, pointerX);
         UsageChartRenderer.DrawCrosshair(SessionsOverlay, _samples, _from, _to, _viewTo, pointerX);
 
+        // A projection's dashed line lives past the last real sample, so the nearest-bucket lookup
+        // below would otherwise just keep reporting that last (increasingly stale) real reading
+        // for the entire future strip. Checking the prediction markers first means hovering the
+        // dashed line itself shows what it's actually projecting at that point.
+        if (BuildPredictionReadout(_predictionMarkers, pointerX) is string predictionReadout)
+        {
+            ReadoutText.Text = predictionReadout;
+            return;
+        }
+
         var sample = UsageChartRenderer.SampleAt(_samples, _from, _to, _viewTo, pointerX, sourceCanvas.ActualWidth);
         ReadoutText.Text = sample is null ? IdleReadout : BuildReadout(sample);
+    }
+
+    private static string? BuildPredictionReadout(IReadOnlyList<UsageChartRenderer.PredictionMarker> markers, double pointerX)
+    {
+        List<string>? parts = null;
+        DateTimeOffset? time = null;
+        foreach (var marker in markers)
+        {
+            if (marker.At(pointerX) is not (DateTimeOffset t, double value))
+                continue;
+
+            time ??= t;
+            parts ??= [];
+            parts.Add($"{marker.Label} ~{Math.Round(value):0}%");
+        }
+
+        return parts is null ? null : $"{time!.Value.ToLocalTime():HH:mm} (projected) · {string.Join(" · ", parts)}";
     }
 
     private void ChartCanvas_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -725,6 +822,7 @@ public sealed partial class HistoryWindow : Window
         if (sample.SevenDaySonnet is double sonnet) parts.Add($"7d Sonnet {Math.Round(sonnet):0}%");
         if (sample.SessionCount is int sessions) parts.Add(UsageFormat.Sessions(sessions));
         if (sample.MemoryBytes is long memory) parts.Add($"{UsageFormat.Bytes(memory)} RAM");
+        if (sample.PagedMemoryBytes is long paged) parts.Add($"{UsageFormat.Bytes(paged)} paged");
 
         return string.Join(" · ", parts);
     }

@@ -22,7 +22,11 @@ public static class UsageChartRenderer
 
     // Single-series panels use neutral ink instead of a categorical hue: their identity comes
     // from the panel title, and borrowing a series colour would imply a relation that isn't there.
-    private static readonly Color MemoryColor = Color.FromArgb(0xFF, 0xD4, 0xD4, 0xD8);
+    // The Memory panel is the one exception now that it plots two series (RAM + paged) - RAM keeps
+    // this neutral ink since it's still the primary reading (matches the tray icon/tooltip), and
+    // paged gets its own distinct hue so the two don't read as one blurred line.
+    public static readonly Color MemoryColor = Color.FromArgb(0xFF, 0xD4, 0xD4, 0xD8);
+    public static readonly Color PagedMemoryColor = Color.FromArgb(0xFF, 0xA7, 0x8B, 0xFA);
     private static readonly Color SessionsColor = Color.FromArgb(0xFF, 0x71, 0x71, 0x7A);
     private static readonly Color WarnColor = Color.FromArgb(0xFF, 0xE6, 0x67, 0x67);
 
@@ -45,10 +49,15 @@ public static class UsageChartRenderer
     private const double FutureStripWidthPx = 40;
     private const double BreakGapWidthPx = 16;
 
+    private static readonly TimeSpan SevenDayPeriod = TimeSpan.FromDays(7);
+    private static readonly TimeSpan ThirtyDayPeriod = TimeSpan.FromDays(30);
+
     public static IReadOnlyList<string> DrawQuota(
-        Canvas canvas, IReadOnlyList<UsageSample> samples, DateTimeOffset from, DateTimeOffset to, DateTimeOffset viewTo, DateTimeOffset? predictAsOf)
+        Canvas canvas, IReadOnlyList<UsageSample> samples, DateTimeOffset from, DateTimeOffset to, DateTimeOffset viewTo, DateTimeOffset? predictAsOf,
+        TimeSpan selectedPeriod, out IReadOnlyList<PredictionMarker> predictionMarkers)
     {
         canvas.Children.Clear();
+        predictionMarkers = [];
         if (!TryGetPlotRect(canvas, from, to, viewTo, out var plot))
             return [];
 
@@ -83,7 +92,13 @@ public static class UsageChartRenderer
         // live counters row, the axis stretching out to meet it, and `AddPrediction`'s own hollow
         // marker already sitting right where that reset lands, the extra dashed "X reset" line +
         // label was redundant clutter rather than new information.
-        DrawWindowBoundaries(canvas, plot, samples, static s => s.FiveHourResetsAt, FiveHourColor, "5h", TimeSpan.FromHours(5), drawUpcoming: false, topLabels);
+        // At the 7d zoom, a week of 5h resets packs in every few pixels - drawn at full weight
+        // they'd compete with the 7d/7d-Sonnet lines that actually matter at that zoom, so they're
+        // thinned instead. At 30d there'd be dozens of them with no room to even show a gap between
+        // resets, so they're dropped entirely rather than rendering as a solid smear.
+        var fiveHourThickness = selectedPeriod >= ThirtyDayPeriod ? 0 : selectedPeriod >= SevenDayPeriod ? 0.75 : 1.5;
+        if (fiveHourThickness > 0)
+            DrawWindowBoundaries(canvas, plot, samples, static s => s.FiveHourResetsAt, FiveHourColor, "5h", TimeSpan.FromHours(5), drawUpcoming: false, topLabels, fiveHourThickness);
         DrawWindowBoundaries(canvas, plot, samples, static s => s.SevenDayResetsAt, SevenDayColor, "7d", TimeSpan.FromDays(7), drawUpcoming: false, topLabels);
         DrawWindowBoundaries(canvas, plot, samples, static s => s.SevenDaySonnetResetsAt, SevenDaySonnetColor, "7d Sonnet", TimeSpan.FromDays(7), drawUpcoming: true, topLabels);
 
@@ -95,14 +110,37 @@ public static class UsageChartRenderer
         DrawLineSeries(canvas, plot, buckets, static b => b.FiveHour, 100, FiveHourColor, "5h");
 
         var predictions = new List<string>();
+        var markers = new List<PredictionMarker>();
         if (predictAsOf is DateTimeOffset now)
         {
-            AddPrediction(predictions, canvas, plot, samples, "5h", FiveHourColor, static s => s.FiveHour, static s => s.FiveHourResetsAt, now);
-            AddPrediction(predictions, canvas, plot, samples, "7d", SevenDayColor, static s => s.SevenDay, static s => s.SevenDayResetsAt, now);
-            AddPrediction(predictions, canvas, plot, samples, "7d Sonnet", SevenDaySonnetColor, static s => s.SevenDaySonnet, static s => s.SevenDaySonnetResetsAt, now);
+            AddPrediction(predictions, markers, canvas, plot, samples, "5h", FiveHourColor, static s => s.FiveHour, static s => s.FiveHourResetsAt, now);
+            AddPrediction(predictions, markers, canvas, plot, samples, "7d", SevenDayColor, static s => s.SevenDay, static s => s.SevenDayResetsAt, now);
+            AddPrediction(predictions, markers, canvas, plot, samples, "7d Sonnet", SevenDaySonnetColor, static s => s.SevenDaySonnet, static s => s.SevenDaySonnetResetsAt, now);
         }
 
+        predictionMarkers = markers;
         return predictions;
+    }
+
+    // A prediction's dashed line reduced to what a pointer-hover readout needs: its two pixel-space
+    // endpoints and the time/value they represent. Both time and value are interpolated by the
+    // same x-fraction along that straight pixel-space line - not by re-deriving a "true" time from
+    // x - so the reported time can never disagree with where the line is actually drawn, even once
+    // the axis break bends the underlying time scale.
+    public readonly record struct PredictionMarker(string Label, Color Color, double X1, DateTimeOffset Time1, double Value1, double X2, DateTimeOffset Time2, double Value2)
+    {
+        public (DateTimeOffset Time, double Value)? At(double x)
+        {
+            var lo = Math.Min(X1, X2);
+            var hi = Math.Max(X1, X2);
+            if (x < lo || x > hi || hi - lo < 1e-6)
+                return null;
+
+            var t = (x - X1) / (X2 - X1);
+            var time = Time1 + TimeSpan.FromTicks((long)((Time2 - Time1).Ticks * t));
+            var value = Value1 + t * (Value2 - Value1);
+            return (time, value);
+        }
     }
 
     public static void DrawMemory(Canvas canvas, IReadOnlyList<UsageSample> samples, DateTimeOffset from, DateTimeOffset to, DateTimeOffset viewTo)
@@ -112,18 +150,31 @@ public static class UsageChartRenderer
             return;
 
         var buckets = Bucketize(samples, from, to);
-        var maxGb = buckets.Max(b => ToGigabytes(b.MemoryBytes) ?? 0);
-        if (buckets.All(b => b.MemoryBytes is null))
+        if (buckets.All(b => b.MemoryBytes is null && b.PagedMemoryBytes is null))
         {
             DrawEmptyState(canvas, EmptyStateMessage(samples));
             return;
         }
 
+        var maxGb = Math.Max(
+            buckets.Max(b => ToGigabytes(b.MemoryBytes) ?? 0),
+            buckets.Max(b => ToGigabytes(b.PagedMemoryBytes) ?? 0));
         var yMax = Math.Max(1, Math.Ceiling(maxGb * 1.25));
         DrawGrid(canvas, plot, yMax, v => $"{v:0.#} GB");
         DrawTimeAxis(canvas, plot);
         DrawNowMarker(canvas, plot, to, new TopLabelLayout());
         DrawAxisBreak(canvas, plot);
+
+        // Paged drawn first (dashed, no fill) so RAM's filled area sits on top of it rather than
+        // the reverse - RAM is the primary reading (it's what the tray icon/tooltip show), paged
+        // is the supplementary one and shouldn't visually compete with it.
+        foreach (var segment in BuildSegments(buckets, static b => ToGigabytes(b.PagedMemoryBytes), plot, yMax))
+        {
+            if (segment.Count == 1)
+                AddDot(canvas, segment[0], PagedMemoryColor);
+            else
+                canvas.Children.Add(NewPolyline(segment, PagedMemoryColor, dashed: true));
+        }
 
         foreach (var segment in BuildSegments(buckets, static b => ToGigabytes(b.MemoryBytes), plot, yMax))
         {
@@ -553,7 +604,8 @@ public static class UsageChartRenderer
 
     private static void DrawWindowBoundaries(
         Canvas canvas, PlotRect plot, IReadOnlyList<UsageSample> samples,
-        Func<UsageSample, DateTimeOffset?> resetSelector, Color color, string label, TimeSpan nominalPeriod, bool drawUpcoming, TopLabelLayout topLabels)
+        Func<UsageSample, DateTimeOffset?> resetSelector, Color color, string label, TimeSpan nominalPeriod, bool drawUpcoming, TopLabelLayout topLabels,
+        double strokeThickness = 1.5)
     {
         DateTimeOffset? previousReset = null;
 
@@ -564,11 +616,11 @@ public static class UsageChartRenderer
 
             if (previousReset is not DateTimeOffset previous)
             {
-                DrawBoundaryLine(canvas, plot, reset - nominalPeriod, color, $"{label} start", topLabels);
+                DrawBoundaryLine(canvas, plot, reset - nominalPeriod, color, $"{label} start", topLabels, strokeThickness);
             }
             else if ((reset - previous).Duration() > ResetJitterTolerance)
             {
-                DrawBoundaryLine(canvas, plot, previous, color, $"{label} reset", topLabels);
+                DrawBoundaryLine(canvas, plot, previous, color, $"{label} reset", topLabels, strokeThickness);
 
                 // Skip the new window's own "start" line when it lands right on top of the
                 // "reset" line just drawn - i.e. this window began immediately, with no idle gap.
@@ -577,7 +629,7 @@ public static class UsageChartRenderer
                 // than the tolerance) is the only case worth two separate lines.
                 var start = reset - nominalPeriod;
                 if ((start - previous).Duration() > ResetJitterTolerance)
-                    DrawBoundaryLine(canvas, plot, start, color, $"{label} start", topLabels);
+                    DrawBoundaryLine(canvas, plot, start, color, $"{label} start", topLabels, strokeThickness);
             }
 
             previousReset = reset;
@@ -587,10 +639,10 @@ public static class UsageChartRenderer
         // window still running, not an extrapolation - just optional per series (see the 5h call
         // site) since a reset that fires every few hours doesn't need its own line every time.
         if (previousReset is DateTimeOffset current && drawUpcoming)
-            DrawBoundaryLine(canvas, plot, current, color, $"{label} reset", topLabels);
+            DrawBoundaryLine(canvas, plot, current, color, $"{label} reset", topLabels, strokeThickness);
     }
 
-    private static void DrawBoundaryLine(Canvas canvas, PlotRect plot, DateTimeOffset t, Color color, string label, TopLabelLayout topLabels)
+    private static void DrawBoundaryLine(Canvas canvas, PlotRect plot, DateTimeOffset t, Color color, string label, TopLabelLayout topLabels, double strokeThickness = 1.5)
     {
         if (t < plot.From || t > plot.To)
             return;
@@ -608,7 +660,7 @@ public static class UsageChartRenderer
             Y1 = plot.Y,
             Y2 = plot.Bottom,
             Stroke = stroke,
-            StrokeThickness = 1.5,
+            StrokeThickness = strokeThickness,
             StrokeDashArray = [4, 2],
         });
 
@@ -627,7 +679,7 @@ public static class UsageChartRenderer
     // the series' own line, plus a plain-language readout - the chart alone doesn't say "this
     // resets before it matters" clearly enough.
     private static void AddPrediction(
-        List<string> predictions, Canvas canvas, PlotRect plot, IReadOnlyList<UsageSample> samples,
+        List<string> predictions, List<PredictionMarker> markers, Canvas canvas, PlotRect plot, IReadOnlyList<UsageSample> samples,
         string label, Color color, Func<UsageSample, double?> valueSelector,
         Func<UsageSample, DateTimeOffset?> resetSelector, DateTimeOffset now)
     {
@@ -714,6 +766,7 @@ public static class UsageChartRenderer
             StrokeThickness = 2,
             StrokeDashArray = [5, 3],
         });
+        markers.Add(new PredictionMarker(label, color, from.X, latest.Timestamp, currentValue, to.X, targetTime, targetValue));
 
         // A hollow marker for a projection still inside the visible range; an arrow pinned to the
         // right edge when it's clipped, so "still climbing off-screen" reads differently from
@@ -731,6 +784,24 @@ public static class UsageChartRenderer
             canvas.Children.Add(marker);
             Canvas.SetLeft(marker, to.X - 3.5);
             Canvas.SetTop(marker, to.Y - 3.5);
+
+            // When the projection crosses 100% before the window's own reset, the hollow marker
+            // above sits at that earlier crossing point, not at the reset - so on its own it reads
+            // as "capped, full stop", with no indication the window clears again later. A small
+            // filled dot at the reset's own x (same row) marks when that actually happens.
+            if (projectedFullAt is not null && reset <= plot.To)
+            {
+                var resetX = plot.XFor(reset);
+                var resetDot = new Ellipse
+                {
+                    Width = 4,
+                    Height = 4,
+                    Fill = new SolidColorBrush(color),
+                };
+                canvas.Children.Add(resetDot);
+                Canvas.SetLeft(resetDot, resetX - 2);
+                Canvas.SetTop(resetDot, to.Y - 2);
+            }
         }
         else
         {
@@ -770,7 +841,7 @@ public static class UsageChartRenderer
         Canvas.SetTop(label, Math.Max(0, (canvas.ActualHeight - label.DesiredSize.Height) / 2));
     }
 
-    private static Polyline NewPolyline(List<Point> points, Color color)
+    private static Polyline NewPolyline(List<Point> points, Color color, bool dashed = false)
     {
         var line = new Polyline
         {
@@ -778,6 +849,8 @@ public static class UsageChartRenderer
             StrokeThickness = 2,
             StrokeLineJoin = PenLineJoin.Round,
         };
+        if (dashed)
+            line.StrokeDashArray = [4, 3];
         foreach (var point in points)
             line.Points.Add(point);
         return line;
