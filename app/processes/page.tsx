@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { DashboardNav } from "@/app/components/DashboardNav";
+import { StrayProcesses } from "@/app/components/StrayProcesses";
 import type { ActiveSession } from "@/app/api/active-sessions/route";
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
@@ -112,6 +113,9 @@ export default function ProcessesPage() {
             )}
 
             {/* Process table */}
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">
+              Claude Code sessions
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -200,6 +204,8 @@ export default function ProcessesPage() {
             </div>
           </>
         )}
+
+        <StrayProcesses />
       </div>
     </div>
   );

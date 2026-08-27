@@ -11,7 +11,7 @@
 | `/projects/[slug]/sessions/[id]` | `app/projects/[slug]/sessions/[id]/page.tsx` | Volledig transcript (rendert `TranscriptPanel`) |
 | `/gallery` | `app/gallery/page.tsx` | Dev-only — wikkelt alleen `ResponsiveViewer`. Retourneert 404 in production. |
 | `/gallery/components` | `app/gallery/components/page.tsx` | Dev-only — standalone fixture-pagina (status indicators + session tiles). Geen nav, geschikt als iframe-target in de viewer. Retourneert 404 in production. |
-| `/processes` | `app/processes/page.tsx` | Overzicht van alle actieve Claude Code processen (pid, sessionId, cwd, memory RAM/paged, startedAt, version, entrypoint). Klikbaar via `MemoryUsageBadge` in de header. |
+| `/processes` | `app/processes/page.tsx` | Overzicht van alle actieve Claude Code processen (pid, sessionId, cwd, memory RAM/paged, startedAt, version, entrypoint). Klikbaar via `MemoryUsageBadge` in de header. Second section: `StrayProcesses` (stranded git/GCM process trees + kill action). |
 
 Schermen + opties per route staan in `screens.md`.
 
@@ -23,8 +23,11 @@ Navigatie via `DashboardNav` met `Link` + `usePathname` — geen `viewMode` stat
 |---|---|
 | `app/lib/dashboard.ts` | Types + utils: `isUnread`, `timeAgo`, `topSegment` |
 | `app/lib/useDataRefresh.ts` | Hook: SSE-verbinding + debounce → `onRefresh` callback |
+| `app/lib/strayProcesses.ts` | Pure detection logic + types for stray git helpers (`buildChains`, `StrayChain`, `StrayReason`). Client-safe — no `child_process`. Unit-tested in `strayProcesses.test.ts`. |
+| `app/lib/strayProcessSnapshot.ts` | Server-only: one PowerShell spawn returning the helper processes plus every live pid (5s timeout, fails silently to empty). |
 | `app/components/DashboardNav.tsx` | Tab-balk + project-filter pills. Props: `projects`, `unreadCount?`, `projectFilter`, `onFilterChange` |
 | `app/components/TokenUsageBadge.tsx` | Compact token-usage badge rechts in de nav. Pollt `/api/token-usage` slim (op reset-moment). Toont alleen niet-null windows. |
+| `app/components/StrayProcesses.tsx` | Section on `/processes`: collapsible chains, reason badges, `Kill chain` / `Kill all` behind `window.confirm`. Renders nothing when there are no stray chains. |
 | `app/components/ScreenDimensions.tsx` | Dev-only: fixed overlay top-right met `window.innerWidth × window.innerHeight`. Gerenderd in root layout alleen als `NODE_ENV === 'development'`. |
 
 Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
@@ -42,6 +45,8 @@ Elke page-route fetcht zijn eigen data. Geen gedeelde server state.
 | `/api/settings` | GET/POST | Leest/schrijft `~/.claude/dashboard-settings.json`. Bevat `autoMarkAsRead`. |
 | `/api/claude-settings/hooks` | GET | Read-only: parseert `hooks` uit `~/.claude/settings.json` → platte lijst `{ event, matcher?, type, shell?, command }[]`. Getoond op `/settings` als "Configured hooks" sectie met dashboard-badge (command bevat `/api/hooks`, `session-start-hook.ps1` of `monitor-start.sh`) en ✓ configured badges op de setup-snippets. |
 | `/api/active-sessions` | GET | Live sessies uit `~/.claude/sessions/*.json` (pid, sessionId, cwd, startedAt, …) |
+| `/api/stray-processes` | GET | Windows-only: detects stranded `git` / `git-remote-https` / `git-credential-manager` process trees with a single `Get-CimInstance Win32_Process` call. Returns `{ supported, chains, totalProcesses, oldestAgeMs }`; each chain carries `reasons` (`waiting-for-credentials` \| `orphaned` \| `stale`), `ageMs`, `target` (repo from the remote URL) and its processes with `depth`. Chains without any reason (a git operation that is simply still running) are dropped. |
+| `/api/stray-processes/kill` | POST | `{ pids: number[] }` → `Stop-Process -Force`, leaf-first. Re-enumerates first and refuses any pid that is not a stray helper at that moment (pid-reuse guard). Response: `{ killed, skipped: [{ pid, reason }] }`. |
 | `/api/ide-windows` | GET | Draaiende IDE-vensters uit `~/.claude/ide/*.lock` (alleen levend PID). authToken weggelaten. |
 | `/api/ide-windows/open-file` | POST | `{ port, filePath }` → opent file via MCP-`openFile` over WS + brengt venster naar voorgrond (Windows). |
 | `/api/token-usage` | GET | Leest `~/.claude/.credentials.json` → `claudeAiOauth.accessToken`, roept `https://api.anthropic.com/api/oauth/usage` aan (header `anthropic-beta: oauth-2025-04-20`). Server-side cache 5 min. Geeft `{ five_hour, seven_day, seven_day_sonnet }` terug, elk `{ utilization: number, resets_at: string\|null } \| null`. |

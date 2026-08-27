@@ -130,3 +130,20 @@ Navigatie: klik op de `MemoryUsageBadge` in de header van `/` (toont "N sessions
 | Refresh | Auto-refresh elke 2 minuten (zelfde poll-interval als `MemoryUsageBadge`) |
 
 Data: `GET /api/active-sessions` (zelfde API als `MemoryUsageBadge`).
+
+### Stray git helpers section
+
+`app/components/StrayProcesses.tsx` — second section on `/processes`, Windows-only. Detects git operations that
+deadlocked on a Git Credential Manager prompt and never exited; those hold a lock on their working directory, which
+breaks `git worktree move` and folder deletes.
+
+| Element | Behavior |
+|---|---|
+| Section header | `<n> processes in <m> chains · oldest <age>`, rose when a chain waits on credentials, amber otherwise. Hidden entirely when nothing is stranded. |
+| Hint line | Shown when a chain is credential-blocked: prevent recurrence with `GIT_TERMINAL_PROMPT=0` + `credential.interactive=false`. |
+| Chain row | Root pid, process name, chain size, repo target, age, reason badges (`waiting for credentials` / `orphaned` / `stale`). Click expands the full tree indented by `depth`, with pid, name, command line and RAM. |
+| Kill chain | Kills that chain leaf-first after a `window.confirm`; result line reports killed vs skipped pids. |
+| Kill all | Same for every chain at once. |
+| Refresh | Auto-refresh every 2 minutes, plus an immediate refetch after a kill. |
+
+Data: `GET /api/stray-processes`, `POST /api/stray-processes/kill`.
