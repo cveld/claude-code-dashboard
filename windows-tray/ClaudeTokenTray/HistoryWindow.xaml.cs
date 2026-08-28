@@ -48,6 +48,11 @@ public sealed partial class HistoryWindow : Window
     // actually projecting instead of falling back to the last real (and by then stale) sample.
     private IReadOnlyList<UsageChartRenderer.PredictionMarker> _predictionMarkers = [];
 
+    // Lazily created on the first click of a prediction chip or chart marker, then reused for
+    // every later click (hidden, not destroyed, on close - same lifetime pattern as this window
+    // itself, see AppWindow_Closing).
+    private PredictionExplainerWindow? _explainerWindow;
+
     private IReadOnlyList<UsageSample> _samples = [];
 
     // Null means "pinned to the live edge" - _to tracks DateTimeOffset.Now on every redraw. Once
@@ -318,7 +323,7 @@ public sealed partial class HistoryWindow : Window
         _viewTo = _pinnedTo is null ? ComputeLiveViewTo(_to) : _to;
 
         var predictAsOf = _pinnedTo is null ? now : (DateTimeOffset?)null;
-        var predictions = UsageChartRenderer.DrawQuota(QuotaCanvas, _samples, _from, _to, _viewTo, predictAsOf, _selectedPeriod, out _predictionMarkers);
+        var predictions = UsageChartRenderer.DrawQuota(QuotaCanvas, _samples, _from, _to, _viewTo, predictAsOf, _selectedPeriod, out _predictionMarkers, ShowPredictionExplainer);
         UsageChartRenderer.DrawMemory(MemoryCanvas, _samples, _from, _to, _viewTo);
         UsageChartRenderer.DrawSessions(SessionsCanvas, _samples, _from, _to, _viewTo);
 
@@ -386,9 +391,9 @@ public sealed partial class HistoryWindow : Window
         if (latest is null)
             return;
 
-        AddCounterChip(LiveCountersPanel, "5h", latest.FiveHour, latest.FiveHourResetsAt, UsageChartRenderer.FiveHourColor);
-        AddCounterChip(LiveCountersPanel, "7d", latest.SevenDay, latest.SevenDayResetsAt, UsageChartRenderer.SevenDayColor);
-        AddCounterChip(LiveCountersPanel, "7d Sonnet", latest.SevenDaySonnet, latest.SevenDaySonnetResetsAt, UsageChartRenderer.SevenDaySonnetColor);
+        AddCounterChip(LiveCountersPanel, "5h", latest.FiveHour, latest.FiveHourResetsAt, UsageChartRenderer.FiveHourColor, FindPredictionMarker("5h"));
+        AddCounterChip(LiveCountersPanel, "7d", latest.SevenDay, latest.SevenDayResetsAt, UsageChartRenderer.SevenDayColor, FindPredictionMarker("7d"));
+        AddCounterChip(LiveCountersPanel, "7d Sonnet", latest.SevenDaySonnet, latest.SevenDaySonnetResetsAt, UsageChartRenderer.SevenDaySonnetColor, FindPredictionMarker("7d Sonnet"));
 
         if (latest.SessionCount is int sessions)
         {
@@ -430,7 +435,7 @@ public sealed partial class HistoryWindow : Window
         panel.Children.Add(chip);
     }
 
-    private static void AddCounterChip(StackPanel panel, string label, double? value, DateTimeOffset? resetsAt, Color seriesColor)
+    private void AddCounterChip(StackPanel panel, string label, double? value, DateTimeOffset? resetsAt, Color seriesColor, UsageChartRenderer.PredictionMarker? marker)
     {
         if (value is not double pct)
             return;
@@ -457,7 +462,37 @@ public sealed partial class HistoryWindow : Window
             Foreground = new SolidColorBrush(seriesColor),
             VerticalAlignment = VerticalAlignment.Center,
         });
-        panel.Children.Add(chip);
+
+        // Only clickable when there's actually a projection to explain (no marker for a window
+        // with too little data to fit a trend, or with no reset reported yet).
+        if (marker is UsageChartRenderer.PredictionMarker m)
+        {
+            var interactive = new HandCursorArea();
+            interactive.Children.Add(chip);
+            interactive.Tapped += (_, _) => ShowPredictionExplainer(m);
+            panel.Children.Add(interactive);
+        }
+        else
+        {
+            panel.Children.Add(chip);
+        }
+    }
+
+    private UsageChartRenderer.PredictionMarker? FindPredictionMarker(string label)
+    {
+        foreach (var marker in _predictionMarkers)
+        {
+            if (marker.Label == label)
+                return marker;
+        }
+
+        return null;
+    }
+
+    private void ShowPredictionExplainer(UsageChartRenderer.PredictionMarker marker)
+    {
+        _explainerWindow ??= new PredictionExplainerWindow();
+        _explainerWindow.Show(marker);
     }
 
     private const double ScrubberMinBarWidth = 10;

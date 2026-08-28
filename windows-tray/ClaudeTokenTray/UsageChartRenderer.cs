@@ -54,7 +54,7 @@ public static class UsageChartRenderer
 
     public static IReadOnlyList<string> DrawQuota(
         Canvas canvas, IReadOnlyList<UsageSample> samples, DateTimeOffset from, DateTimeOffset to, DateTimeOffset viewTo, DateTimeOffset? predictAsOf,
-        TimeSpan selectedPeriod, out IReadOnlyList<PredictionMarker> predictionMarkers)
+        TimeSpan selectedPeriod, out IReadOnlyList<PredictionMarker> predictionMarkers, Action<PredictionMarker>? onPredictionTapped = null)
     {
         canvas.Children.Clear();
         predictionMarkers = [];
@@ -113,9 +113,9 @@ public static class UsageChartRenderer
         var markers = new List<PredictionMarker>();
         if (predictAsOf is DateTimeOffset now)
         {
-            AddPrediction(predictions, markers, canvas, plot, samples, "5h", FiveHourColor, static s => s.FiveHour, static s => s.FiveHourResetsAt, now);
-            AddPrediction(predictions, markers, canvas, plot, samples, "7d", SevenDayColor, static s => s.SevenDay, static s => s.SevenDayResetsAt, now);
-            AddPrediction(predictions, markers, canvas, plot, samples, "7d Sonnet", SevenDaySonnetColor, static s => s.SevenDaySonnet, static s => s.SevenDaySonnetResetsAt, now);
+            AddPrediction(predictions, markers, canvas, plot, samples, "5h", FiveHourColor, static s => s.FiveHour, static s => s.FiveHourResetsAt, now, onPredictionTapped);
+            AddPrediction(predictions, markers, canvas, plot, samples, "7d", SevenDayColor, static s => s.SevenDay, static s => s.SevenDayResetsAt, now, onPredictionTapped);
+            AddPrediction(predictions, markers, canvas, plot, samples, "7d Sonnet", SevenDaySonnetColor, static s => s.SevenDaySonnet, static s => s.SevenDaySonnetResetsAt, now, onPredictionTapped);
         }
 
         predictionMarkers = markers;
@@ -127,7 +127,9 @@ public static class UsageChartRenderer
     // same x-fraction along that straight pixel-space line - not by re-deriving a "true" time from
     // x - so the reported time can never disagree with where the line is actually drawn, even once
     // the axis break bends the underlying time scale.
-    public readonly record struct PredictionMarker(string Label, Color Color, double X1, DateTimeOffset Time1, double Value1, double X2, DateTimeOffset Time2, double Value2)
+    public readonly record struct PredictionMarker(
+        string Label, Color Color, double X1, DateTimeOffset Time1, double Value1, double X2, DateTimeOffset Time2, double Value2,
+        DateTimeOffset FirstTime, double FirstValue, DateTimeOffset ResetAt, string Sentence)
     {
         public (DateTimeOffset Time, double Value)? At(double x)
         {
@@ -681,7 +683,7 @@ public static class UsageChartRenderer
     private static void AddPrediction(
         List<string> predictions, List<PredictionMarker> markers, Canvas canvas, PlotRect plot, IReadOnlyList<UsageSample> samples,
         string label, Color color, Func<UsageSample, double?> valueSelector,
-        Func<UsageSample, DateTimeOffset?> resetSelector, DateTimeOffset now)
+        Func<UsageSample, DateTimeOffset?> resetSelector, DateTimeOffset now, Action<PredictionMarker>? onTapped = null)
     {
         UsageSample? latest = null;
         for (var i = samples.Count - 1; i >= 0 && latest is null; i--)
@@ -754,6 +756,25 @@ public static class UsageChartRenderer
         var targetTime = projectedFullAt ?? reset;
         var targetValue = projectedFullAt is not null ? 100 : projectedAtReset;
 
+        // "ddd HH:mm" rather than a bare time - these are almost never "today" (a 7d projection
+        // routinely lands days out), and a bare "14:32" reads as this afternoon regardless of
+        // which day it actually falls on.
+        var sentence = projectedFullAt is DateTimeOffset fullAt
+            ? $"{label}: on pace to hit 100% around {fullAt.ToLocalTime():ddd HH:mm} (resets {reset.ToLocalTime():ddd HH:mm})"
+            : $"{label}: on pace for ~{Math.Round(projectedAtReset):0}% at reset ({reset.ToLocalTime():ddd HH:mm})";
+        predictions.Add(sentence);
+
+        // The earliest sample actually fed into the regression - not necessarily the window's
+        // exact 0% start, but the real observed point the fitted line is anchored from. Carried on
+        // the marker so a click can redraw "what was observed" alongside "what got projected"
+        // without re-deriving the same filter a second time.
+        var firstPoint = points[0];
+        var firstTime = latest.Timestamp + TimeSpan.FromSeconds(firstPoint.Seconds);
+        var predictionMarker = new PredictionMarker(
+            label, color, plot.XFor(latest.Timestamp), latest.Timestamp, currentValue, plot.XFor(targetTime), targetTime, targetValue,
+            firstTime, firstPoint.Value, reset, sentence);
+        markers.Add(predictionMarker);
+
         var from = new Point(plot.XFor(latest.Timestamp), plot.YFor(currentValue, 100));
         var to = new Point(plot.XFor(targetTime), plot.YFor(targetValue, 100));
         canvas.Children.Add(new Line
@@ -766,13 +787,17 @@ public static class UsageChartRenderer
             StrokeThickness = 2,
             StrokeDashArray = [5, 3],
         });
-        markers.Add(new PredictionMarker(label, color, from.X, latest.Timestamp, currentValue, to.X, targetTime, targetValue));
 
         // A hollow marker for a projection still inside the visible range; an arrow pinned to the
         // right edge when it's clipped, so "still climbing off-screen" reads differently from
-        // "this is where it lands".
+        // "this is where it lands". Both markers double as a click target for the projection
+        // explainer - a bigger invisible circle underneath makes that easy to hit without changing
+        // how the small visible dot actually looks.
         if (targetTime <= plot.To)
         {
+            if (onTapped is not null)
+                AddTapTarget(canvas, to, onTapped, predictionMarker);
+
             var marker = new Ellipse
             {
                 Width = 7,
@@ -780,6 +805,7 @@ public static class UsageChartRenderer
                 Stroke = new SolidColorBrush(color),
                 StrokeThickness = 1.5,
                 Fill = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                IsHitTestVisible = false,
             };
             canvas.Children.Add(marker);
             Canvas.SetLeft(marker, to.X - 3.5);
@@ -791,16 +817,20 @@ public static class UsageChartRenderer
             // filled dot at the reset's own x (same row) marks when that actually happens.
             if (projectedFullAt is not null && reset <= plot.To)
             {
-                var resetX = plot.XFor(reset);
+                var resetPoint = new Point(plot.XFor(reset), to.Y);
+                if (onTapped is not null)
+                    AddTapTarget(canvas, resetPoint, onTapped, predictionMarker);
+
                 var resetDot = new Ellipse
                 {
                     Width = 4,
                     Height = 4,
                     Fill = new SolidColorBrush(color),
+                    IsHitTestVisible = false,
                 };
                 canvas.Children.Add(resetDot);
-                Canvas.SetLeft(resetDot, resetX - 2);
-                Canvas.SetTop(resetDot, to.Y - 2);
+                Canvas.SetLeft(resetDot, resetPoint.X - 2);
+                Canvas.SetTop(resetDot, resetPoint.Y - 2);
             }
         }
         else
@@ -814,10 +844,18 @@ public static class UsageChartRenderer
             Canvas.SetLeft(arrow, plot.Right - 6);
             Canvas.SetTop(arrow, to.Y);
         }
+    }
 
-        predictions.Add(projectedFullAt is DateTimeOffset fullAt
-            ? $"{label}: on pace to hit 100% around {fullAt.ToLocalTime():HH:mm} (resets {reset.ToLocalTime():HH:mm})"
-            : $"{label}: on pace for ~{Math.Round(projectedAtReset):0}% at reset ({reset.ToLocalTime():HH:mm})");
+    // An invisible, generously-sized square centered on a marker point so it's easy to tap without
+    // enlarging the visible dot itself, and so it can carry the hand cursor Ellipse (sealed) can't.
+    // Drawn underneath the real marker (added to the canvas first) so it never covers it.
+    private static void AddTapTarget(Canvas canvas, Point at, Action<PredictionMarker> onTapped, PredictionMarker marker)
+    {
+        var target = new HandCursorArea { Width = 16, Height = 16 };
+        target.Tapped += (_, _) => onTapped(marker);
+        canvas.Children.Add(target);
+        Canvas.SetLeft(target, at.X - 8);
+        Canvas.SetTop(target, at.Y - 8);
     }
 
     // Distinguishes "nothing has ever been recorded" from "nothing was recorded in the slice
