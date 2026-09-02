@@ -49,7 +49,7 @@ public class WinFocus {
   [WinFocus]::SetForegroundWindow($p.MainWindowHandle)
   Write-Host "focused"
 } else { Write-Host "not found or no window" }`;
-    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps]);
+    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps], { windowsHide: true });
     child.stdout.on("data", (d) => console.log(`[open-file] ps: ${d.toString().trim()}`));
     child.stderr.on("data", (d) => console.error(`[open-file] ps err: ${d.toString().trim()}`));
   }

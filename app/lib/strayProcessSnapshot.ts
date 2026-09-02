@@ -23,7 +23,7 @@ export function snapshot(): Promise<Snapshot> {
       `[pscustomobject]@{ procs = @($procs); pids = @(Get-Process | Select-Object -ExpandProperty Id) } | ` +
       `ConvertTo-Json -Compress -Depth 4`;
 
-    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps]);
+    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps], { windowsHide: true });
 
     let settled = false;
     const finish = (value: Snapshot) => {

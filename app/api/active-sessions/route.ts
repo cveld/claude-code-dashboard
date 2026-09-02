@@ -41,7 +41,7 @@ function getMemoryUsage(pids: number[]): Promise<Map<number, MemoryUsage>> {
 
   return new Promise((resolve) => {
     const ps = `Get-Process -Id ${pids.join(",")} -ErrorAction SilentlyContinue | Select-Object Id,WorkingSet64,PagedMemorySize64 | ConvertTo-Json -Compress`;
-    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps]);
+    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps], { windowsHide: true });
 
     const timeout = setTimeout(() => {
       child.kill();

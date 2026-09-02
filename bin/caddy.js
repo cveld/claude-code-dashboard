@@ -182,19 +182,23 @@ function createCaddyRoute(options) {
     }
   }
 
-  // Sends a request through Caddy's own HTTP listener carrying our Host header, so the answer
+  // Sends a request through Caddy's listener carrying our Host header, so the answer
   // tells us whether the upstream we registered is reachable from inside Caddy.
+  // Uses HTTPS when the server listens on a TLS port (443), and plain HTTP otherwise.
   function probe() {
     const first = String(listen[0] || ":80");
     const listenPort = Number(first.slice(first.lastIndexOf(":") + 1)) || 80;
+    const useTls = listenPort === 443;
+    const transport = useTls ? https : http;
     return new Promise((resolve) => {
-      const req = http.request(
+      const req = transport.request(
         {
           hostname: adminUrl.hostname,
           port: listenPort,
           method: "GET",
           path: "/",
           headers: { host: options.host },
+          rejectUnauthorized: false,
         },
         (res) => {
           res.resume();

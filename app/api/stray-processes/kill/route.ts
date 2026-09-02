@@ -46,7 +46,7 @@ function stopProcesses(pids: number[]): Promise<Set<number>> {
       `Start-Sleep -Milliseconds 300; ` +
       `@(${pids.join(",")}) | Where-Object { -not (Get-Process -Id $_ -ErrorAction SilentlyContinue) } | ConvertTo-Json -Compress`;
 
-    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps]);
+    const child = spawn("powershell", ["-NonInteractive", "-NoProfile", "-Command", ps], { windowsHide: true });
 
     let settled = false;
     const finish = (gone: Set<number>) => {
