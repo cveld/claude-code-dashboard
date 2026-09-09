@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/cveld/claude-code-dashboard/compare/v0.6.0...v0.7.0) (2026-09-09)
+
+
+### Features
+
+* **dev:** add optional Caddy reverse-proxy integration ([e812d9f](https://github.com/cveld/claude-code-dashboard/commit/e812d9f4fd2cfe0bdce0fd48092ee9f56b774184))
+* **processes:** collapsible sections, manual refresh, and a stray-helper badge ([d675ac2](https://github.com/cveld/claude-code-dashboard/commit/d675ac258369c1c85db60f1586cbecd8078278c0))
+* **processes:** detect and manage stray git/GCM process trees ([b223a73](https://github.com/cveld/claude-code-dashboard/commit/b223a73628943d53c994928b098f2ec72ec1ce0c))
+* **processes:** kill sessions, detect unregistered claude.exe, live SSE updates ([4ccca5d](https://github.com/cveld/claude-code-dashboard/commit/4ccca5d80b7f32994dfd5cfaed88a4dc855a940e))
+* **tray:** remember history window position, split memory chart, prediction hover ([6089f54](https://github.com/cveld/claude-code-dashboard/commit/6089f54057d334a032421f326b1997455c67dc76))
+
+
+### Bug Fixes
+
+* **ci:** bump publish job to Node 22 ([39438e2](https://github.com/cveld/claude-code-dashboard/commit/39438e2b1260b9c35cd2f352542f7499f8c08272))
+* **ci:** bump publish job to Node 22 instead of pinning npm to v11 ([7a10f23](https://github.com/cveld/claude-code-dashboard/commit/7a10f23f5ad058f03e626bb9306f240232dec089))
+
 ## [0.6.0](https://github.com/cveld/claude-code-dashboard/compare/v0.5.0...v0.6.0) (2026-08-18)
 
 
