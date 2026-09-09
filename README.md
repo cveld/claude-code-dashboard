@@ -136,6 +136,8 @@ Add the following to `~/.claude/settings.json` to forward stop and notification 
 
 ## Windows tray app
 
+![Windows tray app](docs/images/windows-tray.png)
+
 Optional companion app: `windows-tray/ClaudeTokenTray`, a standalone .NET / WinUI 3 project. It
 lives alongside the Next.js app, is not published or referenced by it, and runs independently of
 `npm run dev`.
