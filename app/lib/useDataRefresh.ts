@@ -8,14 +8,27 @@ export interface ChangeEvent {
   sessionId: string | null;
 }
 
+export interface SessionEvent {
+  type: "added" | "removed";
+  pid: number;
+}
+
 export function useDataRefresh(
   onRefresh: (change?: ChangeEvent) => void,
-  onHookEvent?: (event: HookEvent) => void
+  onHookEvent?: (event: HookEvent) => void,
+  onSessionEvent?: (event: SessionEvent) => void
 ) {
   const refreshRef = useRef(onRefresh);
-  refreshRef.current = onRefresh;
   const hookRef = useRef(onHookEvent);
-  hookRef.current = onHookEvent;
+  const sessionRef = useRef(onSessionEvent);
+
+  // Keep the refs pointing at the latest callbacks without depending on them
+  // in the effect below — ref writes must happen outside render.
+  useEffect(() => {
+    refreshRef.current = onRefresh;
+    hookRef.current = onHookEvent;
+    sessionRef.current = onSessionEvent;
+  });
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -38,6 +51,12 @@ export function useDataRefresh(
     es.addEventListener("hook", (e) => {
       if (hookRef.current) {
         hookRef.current(JSON.parse((e as MessageEvent).data) as HookEvent);
+      }
+    });
+
+    es.addEventListener("session", (e) => {
+      if (sessionRef.current) {
+        sessionRef.current(JSON.parse((e as MessageEvent).data) as SessionEvent);
       }
     });
 

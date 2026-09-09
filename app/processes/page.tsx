@@ -4,18 +4,22 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { DashboardNav } from "@/app/components/DashboardNav";
 import { StrayProcesses } from "@/app/components/StrayProcesses";
+import { UnregisteredClaudeProcesses } from "@/app/components/UnregisteredClaudeProcesses";
+import { useDataRefresh, type SessionEvent } from "@/app/lib/useDataRefresh";
 import type { ActiveSession } from "@/app/api/active-sessions/route";
+import type { KillSessionResult } from "@/app/api/active-sessions/kill/route";
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
+const IDLE_AMBER_MS = 5 * 60_000;
+const IDLE_ROSE_MS = 30 * 60_000;
 
 function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
   return `${Math.round(n / 1024 ** 2)} MB`;
 }
 
-function fmtUptime(startedAt: number): string {
-  const delta = Date.now() - startedAt;
-  const mins = Math.floor(delta / 60_000);
+function fmtDuration(ms: number): string {
+  const mins = Math.floor(ms / 60_000);
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ${mins % 60}m`;
@@ -23,18 +27,43 @@ function fmtUptime(startedAt: number): string {
   return `${days}d ${hours % 24}h`;
 }
 
+function fmtUptime(startedAt: number): string {
+  return fmtDuration(Date.now() - startedAt);
+}
+
+// Time since the last user/assistant turn in the transcript — a proxy for
+// "is anyone still waiting on this", not a live idle signal from the CLI itself.
+function idleMs(lastMessageAt?: string): number | null {
+  if (!lastMessageAt) return null;
+  return Math.max(0, Date.now() - new Date(lastMessageAt).getTime());
+}
+
+function idleColor(ms: number | null): string {
+  if (ms === null) return "text-zinc-600";
+  if (ms > IDLE_ROSE_MS) return "text-rose-400";
+  if (ms > IDLE_AMBER_MS) return "text-amber-400";
+  return "text-zinc-400";
+}
+
 export default function ProcessesPage() {
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [strayCount, setStrayCount] = useState(0);
+  const [unregisteredCount, setUnregisteredCount] = useState(0);
   const [sessionsExpanded, setSessionsExpanded] = useState(true);
+  const [killingPids, setKillingPids] = useState<Set<number>>(new Set());
+  const [killNotice, setKillNotice] = useState<string | null>(null);
 
   const scrollToStray = useCallback(() => {
     document.getElementById("stray-git-helpers")?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  const scrollToUnregistered = useCallback(() => {
+    document.getElementById("unregistered-claude-processes")?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
   const fetchData = useCallback(() => {
-    fetch("/api/active-sessions")
+    return fetch("/api/active-sessions")
       .then((r) => r.json())
       .then((data: ActiveSession[]) => setSessions(data))
       .catch(() => {});
@@ -45,6 +74,27 @@ export default function ProcessesPage() {
     const interval = setInterval(fetchData, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // SSE fast-path: a session file appearing/disappearing patches just that one
+  // row instead of waiting up to POLL_INTERVAL_MS for a full list re-download.
+  const handleSessionEvent = useCallback((event: SessionEvent) => {
+    if (event.type === "removed") {
+      setSessions((prev) => prev?.filter((s) => s.pid !== event.pid) ?? prev);
+      return;
+    }
+    fetch(`/api/active-sessions/${event.pid}`)
+      .then((r) => (r.ok ? (r.json() as Promise<ActiveSession>) : null))
+      .then((session) => {
+        if (!session) return;
+        setSessions((prev) => {
+          const others = (prev ?? []).filter((s) => s.pid !== session.pid);
+          return [...others, session].sort((a, b) => b.startedAt - a.startedAt);
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  useDataRefresh(() => {}, undefined, handleSessionEvent);
 
   const copyId = useCallback((id: string) => {
     navigator.clipboard.writeText(id);
@@ -65,6 +115,39 @@ export default function ProcessesPage() {
     const parts = s.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
     return parts[parts.length - 1] || s.cwd;
   };
+
+  const killSession = useCallback(
+    async (s: ActiveSession) => {
+      const label = titleFromSession(s);
+      if (!window.confirm(`Kill Claude Code process ${s.pid} (${label})?\n\nThis ends the session immediately — any in-flight tool call is aborted.`)) {
+        return;
+      }
+      setKillingPids((prev) => new Set(prev).add(s.pid));
+      setKillNotice(null);
+      try {
+        const res = await fetch("/api/active-sessions/kill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pid: s.pid }),
+        });
+        const result = (await res.json()) as KillSessionResult;
+        setKillNotice(result.killed ? `Killed process ${s.pid}.` : `Could not kill ${s.pid}: ${result.error ?? "unknown error"}`);
+      } catch {
+        setKillNotice(`Kill request for ${s.pid} failed.`);
+      } finally {
+        // Keep showing "Killing…" until the refresh lands, so a successful
+        // kill goes straight from "Killing…" to the row disappearing —
+        // never flashes back to a clickable "Kill" first.
+        await fetchData();
+        setKillingPids((prev) => {
+          const next = new Set(prev);
+          next.delete(s.pid);
+          return next;
+        });
+      }
+    },
+    [fetchData]
+  );
 
   return (
     <div className="w-full">
@@ -92,6 +175,14 @@ export default function ProcessesPage() {
                       className="ml-2 normal-case font-normal text-rose-400 hover:underline"
                     >
                       {strayCount} stray git helper{strayCount === 1 ? "" : "s"}
+                    </button>
+                  )}
+                  {unregisteredCount > 0 && (
+                    <button
+                      onClick={scrollToUnregistered}
+                      className="ml-2 normal-case font-normal text-amber-400 hover:underline"
+                    >
+                      {unregisteredCount} unregistered claude.exe
                     </button>
                   )}
                 </h2>
@@ -122,6 +213,10 @@ export default function ProcessesPage() {
               <span className="text-xs text-zinc-600">({sessions.length})</span>
             </button>
 
+            {sessionsExpanded && killNotice && (
+              <p className="mb-3 text-xs text-zinc-300">{killNotice}</p>
+            )}
+
             {sessionsExpanded && (
               <>
                 {/* Summary bar */}
@@ -151,8 +246,10 @@ export default function ProcessesPage() {
                     <th className="px-3 py-2 text-right">RAM</th>
                     <th className="px-3 py-2 text-right">Paged</th>
                     <th className="px-3 py-2 text-right">Uptime</th>
+                    <th className="px-3 py-2 text-right">Idle</th>
                     <th className="px-3 py-2">Version</th>
                     <th className="px-3 py-2">Entry</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -215,11 +312,30 @@ export default function ProcessesPage() {
                         <td className="px-3 py-2.5 text-right tabular-nums text-zinc-400 text-xs">
                           {fmtUptime(s.startedAt)}
                         </td>
+                        <td
+                          className={`px-3 py-2.5 text-right tabular-nums text-xs ${idleColor(idleMs(s.lastMessageAt))}`}
+                          title={s.lastMessageAt ? `Last transcript activity: ${new Date(s.lastMessageAt).toLocaleString()}` : "No transcript activity recorded yet"}
+                        >
+                          {(() => {
+                            const ms = idleMs(s.lastMessageAt);
+                            return ms === null ? "—" : fmtDuration(ms);
+                          })()}
+                        </td>
                         <td className="px-3 py-2.5 font-mono text-xs text-zinc-500">
                           {s.version}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-zinc-400">
                           {s.entrypoint}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            onClick={() => killSession(s)}
+                            disabled={killingPids.has(s.pid)}
+                            className="text-[10px] px-1.5 py-px rounded border border-zinc-700 text-zinc-500 hover:text-rose-300 hover:border-rose-800 disabled:opacity-50 transition-colors whitespace-nowrap"
+                            title="Kill this Claude Code process"
+                          >
+                            {killingPids.has(s.pid) ? "Killing…" : "Kill"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -232,6 +348,7 @@ export default function ProcessesPage() {
           </>
         )}
 
+        <UnregisteredClaudeProcesses onCountChange={setUnregisteredCount} />
         <StrayProcesses onCountChange={setStrayCount} />
       </div>
     </div>
