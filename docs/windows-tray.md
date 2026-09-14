@@ -266,6 +266,45 @@ the cursor happened to sit exactly on a rendered line. Fix: `Background="Transpa
 canvas that needs pointer events across its whole area (`QuotaCanvas`/`MemoryCanvas`/
 `SessionsCanvas`/`TimeScrubberCanvas` in `HistoryWindow.xaml`).
 
+## Gotcha: "Start with Windows" silently fails once the sparse AppX registration is lost
+
+`TrayIconService.ToggleStartWithWindows()` used to write the raw exe path
+(`Environment.ProcessPath`) straight into the `HKCU\...\Run` key. That works right after a
+`dotnet run`/VS debug session, because that deploy step registers the app's sparse MSIX package
+(`Get-AppxPackage` shows it under its GUID `Identity Name`, not `ClaudeTokenTray`). But this
+registration does not reliably survive a reboot/logoff — found empty (`Get-AppxPackage` returned
+nothing) after the machine had been up for days, matching a Windows Event Log `AppHangTransient`
+for `ClaudeTokenTray.exe` at a prior logon.
+
+Once that registration is gone, launching the packaged exe directly — exactly what the Run key
+does at logon — crashes before `Main` even runs:
+`System.Runtime.InteropServices.COMException (0x80040154): Class not registered` inside the
+Windows App SDK bootstrap static constructor. Since this is a tray app with no window, that crash
+is invisible: no dialog, no taskbar flash, the icon just never appears.
+
+Re-registering the package (`Add-AppxPackage -Register <AppX>\AppxManifest.xml`) is *not* enough
+by itself, and this is the part that's easy to get wrong: even with the package freshly
+registered, `Start-Process` on the raw `.exe` path still starts a process with no package
+identity attached. It runs for a few seconds — long enough that a quick check reads as
+"it works" — then hits the same `REGDB_E_CLASSNOTREG` and dies (confirmed repeatedly: alive for
+5s, gone by 6s, every time, regardless of how recently the package was registered). Package
+identity is only attached when the process is *activated* the way Explorer/the Start Menu do it,
+via `shell:AppsFolder\<PackageFamilyName>!<AppId>` — launching that through `explorer.exe` (a
+single-instance process; the launch is handled by IPC to the existing shell, no second Explorer
+window appears) is what actually works.
+
+**Fix:** the Run key now runs `powershell.exe -WindowStyle Hidden -Command "Add-AppxPackage
+-Register '<AppX>\AppxManifest.xml' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 1500;
+Start-Process explorer.exe 'shell:appsFolder\<PackageFamilyName>!App'"` — re-register (self-heals
+a registration lost across reboots), wait briefly for the shell to notice the (re-)registered
+package, then activate it through `shell:AppsFolder` instead of touching the exe path at all.
+`<PackageFamilyName>` is read from `Package.Current.Id.FamilyName` at the moment "Start with
+Windows" is toggled on, not hardcoded. Verified end-to-end from a fully unregistered state, with
+the command launched as its own detached process (matching how the Run key actually invokes it at
+logon) rather than inline in a test session — the earlier, inline-tested version of this same
+command intermittently failed to activate, which is why the delay and the detached-process
+verification both matter here.
+
 ## Gotcha: `TextBlock` has no `Background` property in WinUI (unlike WPF)
 
 Setting `Background` on a `TextBlock` in code (`new TextBlock { Background = ... }`) is a

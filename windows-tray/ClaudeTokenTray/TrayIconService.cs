@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
+using Windows.ApplicationModel;
 
 namespace ClaudeTokenTray;
 
@@ -514,8 +515,27 @@ public sealed class TrayIconService : IDisposable
         else
         {
             var exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
-            if (exePath is not null)
-                key.SetValue(RunKeyName, $"\"{exePath}\"");
+            var appDir = exePath is not null ? Path.GetDirectoryName(exePath) : null;
+            if (appDir is not null)
+            {
+                // Two layered problems, both invisible since this is a tray app with no window:
+                // 1) The sparse AppX package registration (needed for the Windows App SDK
+                //    runtime to activate at all) does not reliably survive across reboots.
+                //    Re-registering on every logon (cheap, idempotent) self-heals that.
+                // 2) Even with the package registered, launching the raw exe path directly
+                //    (Start-Process on the .exe) does NOT reliably attach package identity to
+                //    the process - it starts, then crashes 2-6s later inside the Windows App
+                //    SDK bootstrap with REGDB_E_CLASSNOTREG. Only activation through
+                //    shell:AppsFolder (the same path Explorer/the Start Menu use) reliably
+                //    works, so that's what has to be launched instead of the exe itself.
+                var manifestPath = Path.Combine(appDir, "AppxManifest.xml");
+                var familyName = Package.Current.Id.FamilyName;
+                var command =
+                    $"Add-AppxPackage -Register '{manifestPath}' -ErrorAction SilentlyContinue; " +
+                    "Start-Sleep -Milliseconds 1500; " +
+                    $"Start-Process explorer.exe 'shell:appsFolder\\{familyName}!App'";
+                key.SetValue(RunKeyName, $"powershell.exe -NoProfile -WindowStyle Hidden -Command \"{command}\"");
+            }
         }
 
         UpdateStartWithWindowsLabel();
