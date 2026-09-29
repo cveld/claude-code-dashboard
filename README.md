@@ -35,7 +35,9 @@ variables (flags win when both are set):
 | — | `CADDY_SERVER_NAME` | first server found in Caddy's config |
 
 If Caddy isn't running or the admin API is unreachable, the launcher says so in one line and
-starts the dashboard normally — Caddy is never a requirement.
+starts the dashboard normally — Caddy is never a requirement. Routes added through the admin
+API are lost when Caddy restarts, so the launcher checks every 30 seconds and re-registers the
+route when it is missing (this also picks up a Caddy that was started after the dashboard).
 
 The upstream host is auto-detected. When Caddy itself runs in Docker, `127.0.0.1` resolves
 inside the container rather than on your host and the route answers `502`; the launcher notices

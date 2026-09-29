@@ -85,13 +85,19 @@ async function launch({
     });
   }
 
+  if (route) {
+    route.keepAlive(port, { onEvent: logKeepAlive(options.host, port) });
+  }
+
   let finalizing = false;
   let childExited = false;
 
   function finalize(code, signal) {
     if (finalizing) return;
     finalizing = true;
-    const cleanup = registered ? route.unregister() : Promise.resolve();
+    // The keep-alive may have registered the route after a failed first attempt, so clean up
+    // whenever Caddy is enabled; deleting a route that does not exist is harmless.
+    const cleanup = route ? route.unregister() : Promise.resolve();
     cleanup.finally(() => {
       // A signal handler on this process suppresses Node's default terminate action, so
       // re-raising the signal here would just re-enter this handler - exit explicitly instead.
@@ -112,4 +118,17 @@ async function launch({
   });
 }
 
-module.exports = { launch };
+/** Console logger for route.keepAlive() events, shared with external launchers. */
+function logKeepAlive(host, port) {
+  return (event) => {
+    if (event.type === "reregistered") {
+      console.log(`Caddy: route for http://${host} was missing, re-registered -> ${event.check.dial}:${port}`);
+    } else if (event.type === "failed") {
+      console.warn(`Caddy: could not re-register http://${host} - ${event.reason}`);
+    } else if (event.type === "admin-down") {
+      console.log("Caddy: admin API unreachable, will re-register once it is back.");
+    }
+  };
+}
+
+module.exports = { launch, logKeepAlive };

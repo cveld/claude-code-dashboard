@@ -239,11 +239,65 @@ function createCaddyRoute(options) {
     }
   }
 
+  // Routes registered through the admin API live only in Caddy's memory, so a Caddy restart
+  // (e.g. Docker Desktop starting up) silently drops them. Poll for our route and put it back
+  // when it disappears; this also covers Caddy being down when the launcher started.
+  function keepAlive(port, { intervalMs = 30000, onEvent } = {}) {
+    let running = false;
+    let adminDown = false;
+    let failing = false;
+
+    const emit = (event) => {
+      if (typeof onEvent !== "function") return;
+      try {
+        onEvent(event);
+      } catch {
+        // A logging callback must never break the watchdog.
+      }
+    };
+
+    const tick = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const res = await adminRequest("GET", `/id/${id}`);
+        if (res.status === 0) {
+          if (!adminDown) emit({ type: "admin-down" });
+          adminDown = true;
+          return;
+        }
+        if (adminDown) emit({ type: "admin-up" });
+        adminDown = false;
+        if (res.ok) return;
+
+        const result = await register(port);
+        if (!result.ok) {
+          // Report a failure once, not on every tick until it recovers.
+          if (!failing) emit({ type: "failed", reason: result.reason });
+          failing = true;
+          return;
+        }
+        failing = false;
+        const check = await verifyAndFix(port);
+        emit({ type: "reregistered", result, check });
+      } catch (e) {
+        emit({ type: "failed", reason: e.message || String(e) });
+      } finally {
+        running = false;
+      }
+    };
+
+    const timer = setInterval(tick, intervalMs);
+    timer.unref();
+    return () => clearInterval(timer);
+  }
+
   return {
     id,
     register,
     unregister,
     verifyAndFix,
+    keepAlive,
     get dialHost() {
       return dialHost;
     },
