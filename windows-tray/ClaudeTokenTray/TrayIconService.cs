@@ -187,7 +187,7 @@ public sealed class TrayIconService : IDisposable
             }
             else if (ex.Message == "token_expired")
             {
-                _errorText = "Claude login token expired - start Claude Code to refresh it";
+                _errorText = "Claude login token expired - open the Claude desktop app or CLI to refresh it";
             }
             else
             {

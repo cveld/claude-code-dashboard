@@ -15,9 +15,6 @@ public sealed class TokenUsageException : Exception
 
 public static class TokenUsageClient
 {
-    private static readonly string CredentialsFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", ".credentials.json");
-
     private const string ApiUrl = "https://api.anthropic.com/api/oauth/usage";
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -27,23 +24,51 @@ public static class TokenUsageClient
         "ClaudeTokenTray",
         "tray.log");
 
+    private static string? _lastSource;
+
     public static async Task<TokenUsage> GetUsageAsync(CancellationToken cancellationToken = default)
     {
-        var (token, expiresAt) = ReadCredentials();
-        if (token is null)
-            throw new TokenUsageException("no_credentials");
-
-        // Claude Code refreshes the token in the credentials file; until it does, calling the API
-        // with the expired token only burns rate-limit budget.
-        if (expiresAt is { } exp && exp <= DateTimeOffset.UtcNow)
+        var sources = TokenSources.Load();
+        if (sources.Usable.Count == 0)
         {
-            Log($"token expired at {exp.ToLocalTime():u}, skipping API call");
+            if (sources.Expired == 0)
+                throw new TokenUsageException("no_credentials");
+
+            // The owning app (CLI or desktop) refreshes its token on its own schedule; until it
+            // does, calling the API with an expired token only burns rate-limit budget.
+            Log($"{sources.Expired} token(s) found, all expired, skipping API call");
             throw new TokenUsageException("token_expired");
         }
 
+        // Try each usable token in preference order; only an auth rejection moves on to the next.
+        TokenUsageException? authError = null;
+        foreach (var candidate in sources.Usable)
+        {
+            try
+            {
+                var usage = await FetchAsync(candidate, cancellationToken).ConfigureAwait(false);
+                if (_lastSource != candidate.Source)
+                {
+                    Log($"using {candidate.Source} token");
+                    _lastSource = candidate.Source;
+                }
+
+                return usage;
+            }
+            catch (TokenUsageException ex) when (ex.Message is "api_error_401" or "api_error_403")
+            {
+                authError = ex;
+            }
+        }
+
+        throw authError!;
+    }
+
+    private static async Task<TokenUsage> FetchAsync(TokenCandidate candidate, CancellationToken cancellationToken)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
         request.Headers.Add("Accept", "application/json");
-        request.Headers.Add("Authorization", $"Bearer {token}");
+        request.Headers.Add("Authorization", $"Bearer {candidate.Token}");
         request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
 
         HttpResponseMessage response;
@@ -53,46 +78,29 @@ public static class TokenUsageClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            Log($"fetch failed: {ex.GetType().Name}: {ex.Message}");
+            Log($"fetch failed ({candidate.Source}): {ex.GetType().Name}: {ex.Message}");
             throw new TokenUsageException("fetch_failed");
         }
 
-        if (!response.IsSuccessStatusCode)
+        using (response)
         {
-            var retryAfter = response.Headers.RetryAfter is { } ra
-                ? ra.Delta ?? (ra.Date is { } d ? d - DateTimeOffset.UtcNow : null)
-                : null;
-            Log($"HTTP {(int)response.StatusCode}, Retry-After: {retryAfter?.ToString() ?? "-"}");
-            throw new TokenUsageException($"api_error_{(int)response.StatusCode}", retryAfter);
-        }
-
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        return new TokenUsage(
-            ParseWindow(root, "five_hour"),
-            ParseWindow(root, "seven_day"),
-            ParseWindow(root, "seven_day_sonnet"));
-    }
-
-    private static (string? Token, DateTimeOffset? ExpiresAt) ReadCredentials()
-    {
-        try
-        {
-            var content = File.ReadAllText(CredentialsFile);
-            using var doc = JsonDocument.Parse(content);
-            var oauth = doc.RootElement.GetProperty("claudeAiOauth");
-            var token = oauth.GetProperty("accessToken").GetString();
-            DateTimeOffset? expiresAt =
-                oauth.TryGetProperty("expiresAt", out var exp) && exp.ValueKind == JsonValueKind.Number
-                    ? DateTimeOffset.FromUnixTimeMilliseconds(exp.GetInt64())
+            if (!response.IsSuccessStatusCode)
+            {
+                var retryAfter = response.Headers.RetryAfter is { } ra
+                    ? ra.Delta ?? (ra.Date is { } d ? d - DateTimeOffset.UtcNow : null)
                     : null;
-            return (token, expiresAt);
-        }
-        catch
-        {
-            return (null, null);
+                Log($"HTTP {(int)response.StatusCode} ({candidate.Source}), Retry-After: {retryAfter?.ToString() ?? "-"}");
+                throw new TokenUsageException($"api_error_{(int)response.StatusCode}", retryAfter);
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            return new TokenUsage(
+                ParseWindow(root, "five_hour"),
+                ParseWindow(root, "seven_day"),
+                ParseWindow(root, "seven_day_sonnet"));
         }
     }
 
