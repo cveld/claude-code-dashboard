@@ -4,7 +4,13 @@ namespace ClaudeTokenTray;
 
 public sealed class TokenUsageException : Exception
 {
-    public TokenUsageException(string message) : base(message) { }
+    public TokenUsageException(string message, TimeSpan? retryAfter = null) : base(message)
+    {
+        RetryAfter = retryAfter;
+    }
+
+    // Server-provided backoff hint (Retry-After header on 429), if any.
+    public TimeSpan? RetryAfter { get; }
 }
 
 public static class TokenUsageClient
@@ -14,13 +20,26 @@ public static class TokenUsageClient
 
     private const string ApiUrl = "https://api.anthropic.com/api/oauth/usage";
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+
+    private static readonly string LogFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ClaudeTokenTray",
+        "tray.log");
 
     public static async Task<TokenUsage> GetUsageAsync(CancellationToken cancellationToken = default)
     {
-        var token = ReadAccessToken();
+        var (token, expiresAt) = ReadCredentials();
         if (token is null)
             throw new TokenUsageException("no_credentials");
+
+        // Claude Code refreshes the token in the credentials file; until it does, calling the API
+        // with the expired token only burns rate-limit budget.
+        if (expiresAt is { } exp && exp <= DateTimeOffset.UtcNow)
+        {
+            Log($"token expired at {exp.ToLocalTime():u}, skipping API call");
+            throw new TokenUsageException("token_expired");
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
         request.Headers.Add("Accept", "application/json");
@@ -34,11 +53,18 @@ public static class TokenUsageClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            Log($"fetch failed: {ex.GetType().Name}: {ex.Message}");
             throw new TokenUsageException("fetch_failed");
         }
 
         if (!response.IsSuccessStatusCode)
-            throw new TokenUsageException($"api_error_{(int)response.StatusCode}");
+        {
+            var retryAfter = response.Headers.RetryAfter is { } ra
+                ? ra.Delta ?? (ra.Date is { } d ? d - DateTimeOffset.UtcNow : null)
+                : null;
+            Log($"HTTP {(int)response.StatusCode}, Retry-After: {retryAfter?.ToString() ?? "-"}");
+            throw new TokenUsageException($"api_error_{(int)response.StatusCode}", retryAfter);
+        }
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, cancellationToken: cancellationToken)
@@ -50,20 +76,39 @@ public static class TokenUsageClient
             ParseWindow(root, "seven_day_sonnet"));
     }
 
-    private static string? ReadAccessToken()
+    private static (string? Token, DateTimeOffset? ExpiresAt) ReadCredentials()
     {
         try
         {
             var content = File.ReadAllText(CredentialsFile);
             using var doc = JsonDocument.Parse(content);
-            return doc.RootElement
-                .GetProperty("claudeAiOauth")
-                .GetProperty("accessToken")
-                .GetString();
+            var oauth = doc.RootElement.GetProperty("claudeAiOauth");
+            var token = oauth.GetProperty("accessToken").GetString();
+            DateTimeOffset? expiresAt =
+                oauth.TryGetProperty("expiresAt", out var exp) && exp.ValueKind == JsonValueKind.Number
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(exp.GetInt64())
+                    : null;
+            return (token, expiresAt);
         }
         catch
         {
-            return null;
+            return (null, null);
+        }
+    }
+
+    // Small append-only diagnostic log so a failing poll leaves a trace of the real HTTP status.
+    private static void Log(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogFile)!);
+            if (File.Exists(LogFile) && new FileInfo(LogFile).Length > 256 * 1024)
+                File.Delete(LogFile);
+            File.AppendAllText(LogFile, $"{DateTimeOffset.Now:u} {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // logging must never break polling
         }
     }
 
