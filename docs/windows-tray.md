@@ -198,6 +198,27 @@ dotnet build
 dotnet run   # launches packaged app straight to tray, no window
 ```
 
+**`dotnet build` alone does not update the running app.** The tray starts from `bin\...\win-x64\AppX\`,
+and only `dotnet run` (packaging/deploy step) refreshes that folder. After a plain build the old
+DLL keeps running; check `AppX\ClaudeTokenTray.dll`'s timestamp. Stop the old tray first
+(`Stop-Process -Name ClaudeTokenTray -Force`), then `dotnet run`.
+
+## Token source and refresh
+
+The tray only reads `~/.claude/.credentials.json` (`claudeAiOauth.accessToken` + `expiresAt`) and
+never refreshes the token itself (refresh tokens rotate; consuming one would log Claude Code out).
+That file is only rewritten by the **CLI** (`claude` in a terminal). The Claude **desktop app** keeps
+its login in `%APPDATA%\Claude\config.json` (`oauth:tokenCache*`), so using only the desktop app
+leaves the file expired. The tray then skips the API call (`token_expired`) instead of sending an
+expired token (the API answered that with a 429, not a 401).
+
+Failure handling in `TokenUsageClient` / `TrayIconService`: 429 backs off via `Retry-After`, else
+5/10/20/40/60 min; transient network errors retry once after 3 s; the manual "Refresh now" bypasses
+the backoff. The memory lookup runs concurrently and no longer delays the usage icon. On start the
+newest history sample is shown as stale until a poll succeeds. Diagnostics go to `tray.log` next to
+`history.jsonl`. As a packaged app, `LocalApplicationData` is redirected to
+`%LOCALAPPDATA%\Packages\<package-id>\LocalCache\Local\ClaudeTokenTray\`.
+
 ## Gotcha: `H.NotifyIcon.WinUI`'s `GeneratedIconSource` never centers text
 
 Used for the tray icon (via `H.NotifyIcon.WinUI` + `TaskbarIcon`). The obvious approach —
