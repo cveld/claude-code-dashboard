@@ -217,7 +217,9 @@ tokens rotate; consuming one would sign the owning app out).
 The desktop values are Electron `safeStorage`: base64(`v10` + 12-byte nonce + ciphertext + 16-byte
 GCM tag), AES-256-GCM. The key is `os_crypt.encrypted_key` in `%APPDATA%\Claude\Local State`:
 base64(`DPAPI` + DPAPI blob), unwrapped with `ProtectedData.Unprotect(CurrentUser)`, so it only works
-for the same Windows user. A key with another prefix (e.g. `APPB`, app-bound encryption) is skipped.
+for the same Windows user. If `encrypted_key` lacks the `DPAPI` prefix the desktop source is skipped.
+Chromium's app-bound encryption (`v20` values, key in the separate `os_crypt.app_bound_encrypted_key`
+field, `APPB` prefix) can only be unwrapped by the app itself; the tray does not use it and ignores `v20` values.
 The decrypted cache is a JSON object keyed `acct:<account>|<user>:<org>:<base-url>:<scopes>`; only
 entries whose key contains `user:profile` (needed by the usage endpoint) are used. The path is built
 from the user profile, not `SpecialFolder.ApplicationData`, because the packaged app's AppData can

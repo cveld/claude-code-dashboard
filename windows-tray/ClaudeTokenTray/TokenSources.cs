@@ -115,8 +115,10 @@ public static class TokenSources
         return candidates;
     }
 
-    // "Local State" holds os_crypt.encrypted_key = base64("DPAPI" + DPAPI blob). Newer Chromium
-    // builds use app-bound encryption ("APPB" prefix) which only the app itself can unwrap.
+    // "Local State" holds os_crypt.encrypted_key = base64("DPAPI" + DPAPI blob), the key for v10/v11
+    // values. Chromium's app-bound encryption (v20 values, key in the separate
+    // os_crypt.app_bound_encrypted_key field, "APPB" prefix) can only be unwrapped by the app
+    // itself; we neither read that field nor decrypt v20 values.
     private static byte[]? ReadDesktopKey()
     {
         using var state = JsonDocument.Parse(ReadShared(Path.Combine(DesktopDir, "Local State")));
