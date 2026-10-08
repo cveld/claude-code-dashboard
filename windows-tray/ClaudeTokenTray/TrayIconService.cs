@@ -129,14 +129,9 @@ public sealed class TrayIconService : IDisposable
         if (!manual && DateTimeOffset.UtcNow < _backoffUntil)
             return;
 
-        try
-        {
-            _memoryUsage = await Task.Run(SessionMemoryClient.GetUsage).ConfigureAwait(true);
-        }
-        catch
-        {
-            // leave previous memory reading in place
-        }
+        // Start the (slow) memory lookup but don't wait for it: the usage icon must not be held
+        // up by it. It is awaited after the usage result has been rendered.
+        var memoryTask = Task.Run(SessionMemoryClient.GetUsage);
 
         TokenUsage? freshUsage = null;
         try
@@ -172,6 +167,16 @@ public sealed class TrayIconService : IDisposable
                 ApplyUsage(_lastGood, stale: true);
             else
                 ApplyError();
+        }
+
+        try
+        {
+            _memoryUsage = await memoryTask.ConfigureAwait(true);
+            Render(); // pick up the memory summary in the tooltip
+        }
+        catch
+        {
+            // leave previous memory reading in place
         }
 
         // Record this poll for the history charts. A failed usage fetch is recorded as an
