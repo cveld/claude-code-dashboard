@@ -313,13 +313,36 @@ public sealed class TrayIconService : IDisposable
     {
         var fiveHour = usage.FiveHour;
         var pct = fiveHour is null ? (int?)null : Math.Clamp((int)Math.Round(fiveHour.Utilization), 0, 100);
-        SetIconText(pct?.ToString() ?? "?", ColorForPercent(pct));
+        SetIconText(pct?.ToString() ?? "?", ColorForPercent(pct), stale: _stale);
+    }
+
+    // Amber "!" badge in the bottom-right corner: the shown numbers are the last known values,
+    // not the live situation (token expired, rate limited, or restored from history after a restart).
+    private static void DrawStaleBadge(Graphics graphics)
+    {
+        const int size = 30;
+        var rect = new Rectangle(IconSize - size, IconSize - size, size, size);
+
+        using var ringBrush = new SolidBrush(Color.FromArgb(32, 32, 32));
+        graphics.FillEllipse(ringBrush, rect.X - 3, rect.Y - 3, size + 6, size + 6);
+
+        using var fillBrush = new SolidBrush(Color.FromArgb(0xF5, 0x9E, 0x0B));
+        graphics.FillEllipse(fillBrush, rect);
+
+        using var font = new Font("Segoe UI", size * 0.85f, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
+        using var textBrush = new SolidBrush(Color.FromArgb(32, 32, 32));
+        using var format = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center,
+        };
+        graphics.DrawString("!", font, textBrush, rect, format);
     }
 
     // Tray icons render at ~16-32px on screen, so text is drawn on a larger
     // (IconSize) canvas with centered layout and a colored circle backdrop -
     // far more legible after downscaling than raw colored text.
-    private void SetIconText(string text, Color color)
+    private void SetIconText(string text, Color color, bool stale = false)
     {
         using var bitmap = new Bitmap(IconSize, IconSize);
         using (var graphics = Graphics.FromImage(bitmap))
@@ -344,6 +367,9 @@ public sealed class TrayIconService : IDisposable
                 LineAlignment = StringAlignment.Center,
             };
             graphics.DrawString(text, font, textBrush, new RectangleF(0, 0, IconSize, IconSize), format);
+
+            if (stale)
+                DrawStaleBadge(graphics);
         }
 
         ApplyBitmap(bitmap);
@@ -359,6 +385,9 @@ public sealed class TrayIconService : IDisposable
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             DrawBar(graphics, BarLeftX, usage.FiveHour);
             DrawBar(graphics, BarRightX, usage.SevenDay);
+
+            if (_stale)
+                DrawStaleBadge(graphics);
         }
 
         ApplyBitmap(bitmap);
