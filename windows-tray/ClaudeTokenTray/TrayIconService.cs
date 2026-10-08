@@ -95,7 +95,38 @@ public sealed class TrayIconService : IDisposable
         _timer.Start();
 
         _ = Task.Run(() => UsageHistoryStore.Prune(HistoryRetention));
+        _ = SeedFromHistoryAsync();
         _ = RefreshAsync();
+    }
+
+    // After a restart there is no in-memory reading, so a failing first poll would show "?".
+    // Seed from the newest recorded sample instead and show it as stale until a poll succeeds.
+    private async Task SeedFromHistoryAsync()
+    {
+        UsageSample? last;
+        try
+        {
+            last = await Task.Run(() => UsageHistoryStore.Load(DateTimeOffset.Now - TimeSpan.FromDays(7))
+                .LastOrDefault(s => s.FiveHour is not null || s.SevenDay is not null || s.SevenDaySonnet is not null))
+                .ConfigureAwait(true);
+        }
+        catch
+        {
+            return;
+        }
+
+        // A real poll may already have finished while the history was loading.
+        if (last is null || _lastGood is not null)
+            return;
+
+        static UsageLimitWindow? Window(double? utilization, DateTimeOffset? resetsAt) =>
+            utilization is { } u ? new UsageLimitWindow(u, resetsAt) : null;
+
+        var seeded = new TokenUsage(
+            Window(last.FiveHour, last.FiveHourResetsAt),
+            Window(last.SevenDay, last.SevenDayResetsAt),
+            Window(last.SevenDaySonnet, last.SevenDaySonnetResetsAt));
+        ApplyUsage(seeded, stale: true);
     }
 
     // Fetches usage with one quick retry for transient network failures (timeouts, connection
