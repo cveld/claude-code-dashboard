@@ -10,7 +10,7 @@ the system tray, independent of `npm run dev` running.
 |---|---|
 | `App.xaml` | Defines the `TaskbarIcon` as an `x:Key="TrayIcon"` resource (not in any window's visual tree — this app never shows a window), plus `XamlUICommand` resources (`RefreshCommand`, `IconStyleNumberCommand`, `IconStyleBarsCommand`, `StartWithWindowsCommand`, `ExitCommand`) wired to the tray's context menu. |
 | `App.xaml.cs` | `OnLaunched` fetches `TrayIcon` from `Resources` and hands it to `TrayIconService`. No `Window` is ever created. |
-| `TokenUsage.cs` / `TokenUsageClient.cs` | C# port of `app/api/token-usage/route.ts`: reads `~/.claude/.credentials.json` → `claudeAiOauth.accessToken`, calls `https://api.anthropic.com/api/oauth/usage` (Bearer + `anthropic-beta: oauth-2025-04-20`), parses `five_hour`/`seven_day`/`seven_day_sonnet`. Utilization is already 0-100 (not a 0-1 fraction) — see `TokenUsageBadge.tsx` for the reference scale. |
+| `TokenUsage.cs` / `TokenUsageClient.cs` / `TokenSources.cs` | C# port of `app/api/token-usage/route.ts`: gets a token from `TokenSources` (CLI credentials file or desktop-app cache, see "Token source and refresh"), calls `https://api.anthropic.com/api/oauth/usage` (Bearer + `anthropic-beta: oauth-2025-04-20`), parses `five_hour`/`seven_day`/`seven_day_sonnet`. Utilization is already 0-100 (not a 0-1 fraction) — see `TokenUsageBadge.tsx` for the reference scale. |
 | `SessionMemoryUsage.cs` / `SessionMemoryClient.cs` | C# counterpart of `app/api/active-sessions/route.ts`'s memory lookup / `MemoryUsageBadge.tsx`: reads `~/.claude/sessions/*.json` for active session `pid`/`cwd`, then queries `Process.GetProcessById(pid).WorkingSet64`/`PagedMemorySize64` directly (no PowerShell shell-out needed in-process). Returns `null` when no sessions are active. |
 | `TrayIconService.cs` | Owns the `TaskbarIcon`, polls every 5 minutes (+ manual "Refresh now"), redraws the icon, builds the tooltip, and handles the "Start with Windows" registry toggle (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`). Also appends a `UsageSample` to `UsageHistoryStore` on every poll (success or failure) for the history window's charts. |
 | `UsageSample.cs` | One poll's worth of data: `Timestamp`, `FiveHour`/`SevenDay`/`SevenDaySonnet` (nullable %), `MemoryBytes`/`PagedMemoryBytes`/`SessionCount`, and `FiveHourResetsAt`/`SevenDayResetsAt`/`SevenDaySonnetResetsAt` (nullable — the exact `resets_at` the API reported for that window on that poll). Every field nullable by design: a failed usage fetch still records a memory-only sample, and vice versa. |
@@ -205,12 +205,30 @@ DLL keeps running; check `AppX\ClaudeTokenTray.dll`'s timestamp. Stop the old tr
 
 ## Token source and refresh
 
-The tray only reads `~/.claude/.credentials.json` (`claudeAiOauth.accessToken` + `expiresAt`) and
-never refreshes the token itself (refresh tokens rotate; consuming one would log Claude Code out).
-That file is only rewritten by the **CLI** (`claude` in a terminal). The Claude **desktop app** keeps
-its login in `%APPDATA%\Claude\config.json` (`oauth:tokenCache*`), so using only the desktop app
-leaves the file expired. The tray then skips the API call (`token_expired`) instead of sending an
-expired token (the API answered that with a 429, not a 401).
+`TokenSources.cs` collects access tokens from **both** places Claude keeps them, so the tray works
+for CLI users, desktop-app users, or both. It only reads tokens and never refreshes them (refresh
+tokens rotate; consuming one would sign the owning app out).
+
+| Source | Where | Written by |
+|---|---|---|
+| `cli` | `~/.claude/.credentials.json` → `claudeAiOauth.accessToken` + `expiresAt` | the `claude` CLI only |
+| `desktop` | `%APPDATA%\Claude\config.json` → `oauth:tokenCacheV2` (then `oauth:tokenCache`) | the Claude desktop app |
+
+The desktop values are Electron `safeStorage`: base64(`v10` + 12-byte nonce + ciphertext + 16-byte
+GCM tag), AES-256-GCM. The key is `os_crypt.encrypted_key` in `%APPDATA%\Claude\Local State`:
+base64(`DPAPI` + DPAPI blob), unwrapped with `ProtectedData.Unprotect(CurrentUser)`, so it only works
+for the same Windows user. A key with another prefix (e.g. `APPB`, app-bound encryption) is skipped.
+The decrypted cache is a JSON object keyed `acct:<account>|<user>:<org>:<base-url>:<scopes>`; only
+entries whose key contains `user:profile` (needed by the usage endpoint) are used. The path is built
+from the user profile, not `SpecialFolder.ApplicationData`, because the packaged app's AppData can
+be redirected.
+
+Order: `cli` first, then `desktop`; within a source the longest-lived token. Expired tokens are
+never sent. A 401/403 falls through to the next candidate; any other error stops. The file only
+shows `using <source> token` in `tray.log` when the source changes. If every token is expired the
+tray skips the API call (`token_expired`) instead of sending one (the API answered an expired token
+with a 429, not a 401). Note the CLI file is *not* refreshed by the desktop app, which is why
+desktop-only users used to see a permanently expired token.
 
 Failure handling in `TokenUsageClient` / `TrayIconService`: 429 backs off via `Retry-After`, else
 5/10/20/40/60 min; transient network errors retry once after 3 s; the manual "Refresh now" bypasses
