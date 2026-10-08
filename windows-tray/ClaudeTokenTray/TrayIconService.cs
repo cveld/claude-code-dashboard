@@ -58,6 +58,9 @@ public sealed class TrayIconService : IDisposable
     private IconStyle _iconStyle;
     private DisplayState _state = DisplayState.Loading;
     private bool _stale;
+    private string? _errorText;
+    private int _consecutiveRateLimits;
+    private DateTimeOffset _backoffUntil = DateTimeOffset.MinValue;
 
     public TrayIconService(TaskbarIcon trayIcon, Action showHistoryWindow)
     {
@@ -74,7 +77,7 @@ public sealed class TrayIconService : IDisposable
         _exitCommand = (XamlUICommand)resources["ExitCommand"];
 
         _showHistoryCommand.ExecuteRequested += (_, _) => _showHistoryWindow();
-        _refreshCommand.ExecuteRequested += (_, _) => _ = RefreshAsync();
+        _refreshCommand.ExecuteRequested += (_, _) => _ = RefreshAsync(manual: true);
         _iconStyleNumberCommand.ExecuteRequested += (_, _) => SetIconStyle(IconStyle.Number);
         _iconStyleBarsCommand.ExecuteRequested += (_, _) => SetIconStyle(IconStyle.Bars);
         _startWithWindowsCommand.ExecuteRequested += (_, _) => ToggleStartWithWindows();
@@ -95,8 +98,37 @@ public sealed class TrayIconService : IDisposable
         _ = RefreshAsync();
     }
 
-    private async Task RefreshAsync()
+    // Fetches usage with one quick retry for transient network failures (timeouts, connection
+    // resets). Rate limits and HTTP errors are not retried here - they back off via _backoffUntil.
+    private static async Task<TokenUsage> GetUsageWithRetryAsync()
     {
+        try
+        {
+            return await TokenUsageClient.GetUsageAsync().ConfigureAwait(false);
+        }
+        catch (TokenUsageException ex) when (ex.Message == "fetch_failed")
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            return await TokenUsageClient.GetUsageAsync().ConfigureAwait(false);
+        }
+    }
+
+    // Exponential backoff after repeated 429s: 5, 10, 20, 40 min, capped at 60. A server-provided
+    // Retry-After wins. Without this the tray keeps hitting a rate-limited endpoint every poll.
+    private void ScheduleBackoff(TokenUsageException ex)
+    {
+        _consecutiveRateLimits++;
+        var exponential = TimeSpan.FromMinutes(Math.Min(60, 5 * Math.Pow(2, _consecutiveRateLimits - 1)));
+        var delay = ex.RetryAfter is { } ra && ra > TimeSpan.Zero ? ra : exponential;
+        _backoffUntil = DateTimeOffset.UtcNow + delay;
+    }
+
+    private async Task RefreshAsync(bool manual = false)
+    {
+        // Scheduled polls respect the backoff; the explicit Refresh menu item bypasses it.
+        if (!manual && DateTimeOffset.UtcNow < _backoffUntil)
+            return;
+
         try
         {
             _memoryUsage = await Task.Run(SessionMemoryClient.GetUsage).ConfigureAwait(true);
@@ -109,16 +141,33 @@ public sealed class TrayIconService : IDisposable
         TokenUsage? freshUsage = null;
         try
         {
-            freshUsage = await TokenUsageClient.GetUsageAsync().ConfigureAwait(true);
+            freshUsage = await GetUsageWithRetryAsync().ConfigureAwait(true);
             _lastGood = freshUsage;
+            _consecutiveRateLimits = 0;
+            _backoffUntil = DateTimeOffset.MinValue;
+            _errorText = null;
             ApplyUsage(freshUsage, stale: false);
         }
         catch (TokenUsageException ex) when (ex.Message == "no_credentials")
         {
             ApplyNotLoggedIn();
         }
-        catch (TokenUsageException)
+        catch (TokenUsageException ex)
         {
+            if (ex.Message == "api_error_429")
+            {
+                ScheduleBackoff(ex);
+                _errorText = $"Rate limited, retrying after {_backoffUntil.ToLocalTime():HH:mm}";
+            }
+            else if (ex.Message == "token_expired")
+            {
+                _errorText = "Claude login token expired - start Claude Code to refresh it";
+            }
+            else
+            {
+                _errorText = $"Failed to reach Claude usage API ({ex.Message})";
+            }
+
             if (_lastGood is not null)
                 ApplyUsage(_lastGood, stale: true);
             else
@@ -199,7 +248,7 @@ public sealed class TrayIconService : IDisposable
 
             case DisplayState.Error:
                 SetIconText("?", Color.Gray);
-                tooltipText = "Failed to reach Claude usage API";
+                tooltipText = _errorText ?? "Failed to reach Claude usage API";
                 _trayIcon.TrayToolTip = null;
                 break;
 
@@ -213,7 +262,7 @@ public sealed class TrayIconService : IDisposable
 
                 tooltipText = BuildTooltipText(usage);
                 if (_stale)
-                    tooltipText += "\n(stale - last refresh failed)";
+                    tooltipText += "\n(stale - " + (_errorText ?? "last refresh failed") + ")";
                 _trayIcon.TrayToolTip = BuildTooltipContent(usage, _stale, _memoryUsage);
                 break;
         }
